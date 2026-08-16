@@ -1,4 +1,4 @@
-# Recap Raven
+# Recap Raven Obsidian Plugin
 
 [![CI](https://github.com/RecapRaven/obsidian-recap-raven/actions/workflows/ci.yml/badge.svg)](https://github.com/RecapRaven/obsidian-recap-raven/actions/workflows/ci.yml)
 [![Security](https://github.com/RecapRaven/obsidian-recap-raven/actions/workflows/security.yml/badge.svg)](https://github.com/RecapRaven/obsidian-recap-raven/actions/workflows/security.yml)
