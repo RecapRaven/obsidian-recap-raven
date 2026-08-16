@@ -54,8 +54,13 @@
 
 .recap-raven-session-title {
   color: var(--text-normal);
-  font-weight: var(--font-semibold);
   overflow-wrap: anywhere;
+}
+
+.recap-raven-session-title strong,
+.recap-raven-plan-session strong,
+.recap-raven-plan-action strong {
+  font-weight: var(--font-semibold);
 }
 
 .recap-raven-session-meta,
@@ -86,6 +91,17 @@
 .recap-raven-plan-list li,
 .recap-raven-summary-list li {
   margin-block: var(--size-2-2);
+  overflow-wrap: anywhere;
+}
+
+.recap-raven-plan-list li {
+  margin-block: var(--size-4-3);
+}
+
+.recap-raven-plan-action {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  margin-block-start: var(--size-2-2);
   overflow-wrap: anywhere;
 }
 

@@ -36,7 +36,7 @@ Before the Community listing is available, download `main.js`, `manifest.json`, 
 ## Setup
 
 1. Open **Settings → Recap Raven**.
-2. Under **Obsidian export key**, choose or create a named Obsidian secret and paste your campaign-bound export key into it.
+2. Under **Recap Raven export API key**, create or select an Obsidian secret. Use a lowercase secret ID such as `recap-raven-api-key`, then paste your campaign-bound `raven_obs_…` key as its value.
 3. Select **Test connection**. The bound campaign name should appear.
 4. Optionally change the import folder, tags, or campaign-index preference.
 
