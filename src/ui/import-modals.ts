@@ -14,6 +14,15 @@ function sessionLabel(item: PlannedImportItem): string {
     : `Session ${item.sessionNumber}: ${item.title}`;
 }
 
+function renderSessionTitle(container: HTMLElement, item: PlannedImportItem): void {
+  if (item.sessionNumber === null) {
+    container.setText(item.title);
+    return;
+  }
+  container.createEl('strong', { text: `Session ${item.sessionNumber}:` });
+  container.append(` ${item.title}`);
+}
+
 function dateLabel(value: string | null): string {
   if (value === null) return 'Date unavailable';
   const date = new Date(value);
@@ -139,7 +148,8 @@ export class ImportSelectionModal extends Modal {
         this.renderFooter();
       });
       const text = row.createDiv({ cls: 'recap-raven-session-row-text' });
-      text.createDiv({ cls: 'recap-raven-session-title', text: sessionLabel(item) });
+      const title = text.createDiv({ cls: 'recap-raven-session-title' });
+      renderSessionTitle(title, item);
       text.createDiv({
         cls: 'recap-raven-session-meta',
         text: `${dateLabel(item.recordedAt)} · ${stateLabel(item)}`,
@@ -193,11 +203,14 @@ export class ImportPreviewModal extends Modal {
     });
     const list = this.contentEl.createEl('ul', { cls: 'recap-raven-plan-list' });
     for (const item of selected) {
-      list.createEl('li', {
-        text: item.state === 'imported'
-          ? `${sessionLabel(item)} — skip (${item.existingPath ?? 'already imported'})`
-          : `${sessionLabel(item)} — create ${item.destinationPath}`,
-      });
+      const entry = list.createEl('li');
+      const title = entry.createDiv({ cls: 'recap-raven-plan-session' });
+      renderSessionTitle(title, item);
+      const action = entry.createDiv({ cls: 'recap-raven-plan-action' });
+      action.createEl('strong', { text: item.state === 'imported' ? 'Skip' : 'Create' });
+      action.append(item.state === 'imported'
+        ? ` ${item.existingPath ?? 'already imported'}`
+        : ` ${item.destinationPath}`);
     }
     const footer = this.contentEl.createDiv({ cls: 'recap-raven-modal-footer' });
     const buttons = footer.createDiv({ cls: 'recap-raven-inline-actions' });

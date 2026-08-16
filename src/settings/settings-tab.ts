@@ -23,7 +23,7 @@ export class RecapRavenSettingTab extends PluginSettingTab {
     containerEl.empty();
 
     new Setting(containerEl)
-      .setName('Obsidian export key')
+      .setName('Recap Raven export API key')
       .setDesc(this.apiKeyDescription())
       .addComponent((element) => {
         return new SecretComponent(this.app, element)
@@ -31,6 +31,7 @@ export class RecapRavenSettingTab extends PluginSettingTab {
           .onChange(async (value) => {
             this.connectionMessage = 'Not checked';
             await this.host.updateSettings({ secretName: value });
+            this.display();
           });
       });
 
@@ -104,8 +105,9 @@ export class RecapRavenSettingTab extends PluginSettingTab {
   private apiKeyDescription(): DocumentFragment {
     const fragment = createFragment();
     fragment.append(
-      'Choose or create a named Obsidian secret containing your campaign-bound export key. '
-        + 'The key value is not saved in this plugin’s settings. ',
+      'Select an Obsidian secret containing your campaign-bound Recap Raven export API key. '
+        + 'When creating the secret, use a lowercase ID such as recap-raven-api-key, then paste '
+        + 'the raven_obs_… key as its value. The key value is not saved in this plugin’s settings. ',
     );
     const link = fragment.createEl('a', { text: 'Create an export key', href: API_KEYS_URL });
     link.setAttribute('target', '_blank');

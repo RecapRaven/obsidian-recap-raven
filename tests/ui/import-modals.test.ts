@@ -44,6 +44,9 @@ describe('import modal accessibility', () => {
       'Select Session 1: Through the Silver Door',
     ]);
     expect(checkboxes[0]?.disabled).toBe(true);
+    const sessionNumbers = [...(dialog?.querySelectorAll('.recap-raven-session-title strong') ?? [])]
+      .map((element) => element.textContent);
+    expect(sessionNumbers).toEqual(['Session 2:', 'Session 1:']);
     expect(button('Preview plan').disabled).toBe(true);
     expect(button('Import selected').disabled).toBe(true);
 
@@ -63,6 +66,10 @@ describe('import modal accessibility', () => {
     );
     expect(document.body.textContent).toContain('No notes have been changed.');
     expect(document.body.textContent).not.toContain('Import');
+    expect(document.querySelector('.recap-raven-plan-session strong')?.textContent).toBe('Session 1:');
+    expect(document.querySelector('.recap-raven-plan-action')?.textContent).toBe(
+      'Create Recap Raven/The Glass Archive/Sessions/Session 1 - Through the Silver Door.md',
+    );
     const close = button('Close');
     expect(close.classList.contains('mod-cta')).toBe(true);
     close.click();
