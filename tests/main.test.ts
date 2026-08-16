@@ -6,6 +6,7 @@ import {
   MarkdownView,
   TFile,
   TFolder,
+  notices,
   requestUrl,
 } from './mocks/obsidian';
 import type { MockApp, MockCommand } from './mocks/obsidian';
@@ -29,7 +30,7 @@ interface PluginHarness {
 describe('production plugin orchestration', () => {
   it('keeps networking manual, resolves only the SecretStorage reference, previews, and creates exclusively', async () => {
     const harness = await pluginHarness();
-    const canonical = 'Recap Raven/The Glass Archive/Sessions/Session 1 - Through the Silver Door.md';
+    const canonical = 'Recap Raven/The Glass Archive/Sessions/2026-08-11 - Session 1 - Through the Silver Door.md';
     harness.files.set(canonical, new TFile(canonical, 'user-owned original'));
 
     expect(requestUrl).not.toHaveBeenCalled();
@@ -38,6 +39,7 @@ describe('production plugin orchestration', () => {
       'import-session-recaps',
       'import-all-new-recaps',
       'preview-new-recap-import',
+      'create-campaign-index',
       'open-current-recap',
     ]);
 
@@ -65,9 +67,14 @@ describe('production plugin orchestration', () => {
 
     expect(requestUrl).toHaveBeenCalledTimes(3);
     expect(harness.files.get(canonical)).toMatchObject({ content: 'user-owned original' });
-    const alternate = 'Recap Raven/The Glass Archive/Sessions/Session 1 - Through the Silver Door [22222222].md';
+    const alternate = 'Recap Raven/The Glass Archive/Sessions/2026-08-11 - Session 1 - Through the Silver Door [22222222].md';
     expect(harness.files.get(alternate)).toBeInstanceOf(TFile);
-    expect(harness.files.get('Recap Raven/The Glass Archive/Campaign index.md')).toBeInstanceOf(TFile);
+    const index = harness.files.get('Recap Raven/The Glass Archive/Campaign index.md');
+    expect(index).toBeInstanceOf(TFile);
+    if (!(index instanceof TFile)) throw new Error('Campaign index was not created.');
+    expect(index.content).toContain(
+      '```query\npath:"Recap Raven/The Glass Archive/Sessions"\n```',
+    );
     expect(document.body.textContent).toContain('1 imported, 0 skipped, 0 failed, 0 not attempted.');
   });
 
@@ -94,6 +101,55 @@ describe('production plugin orchestration', () => {
     expect(document.body.textContent).not.toContain('raven_obs_secret');
     expect([...harness.files.keys()].filter((path) => path.includes('/Sessions/'))).toHaveLength(1);
   });
+
+  it('signposts Obsidian settings when the export key is no longer authorized', async () => {
+    const harness = await pluginHarness();
+    requestUrl.mockResolvedValueOnce(response({}, 401));
+
+    command(harness, 'import-session-recaps').callback?.();
+    await waitFor(() => notices.length > 0);
+
+    expect(notices.at(-1)).toEqual({
+      message: 'The export key is invalid, expired, or revoked. Open Obsidian Settings → Recap Raven to select a new key.',
+      timeout: 8000,
+    });
+  });
+
+  it('keeps generated indexes idempotent and preserves a user-owned canonical index', async () => {
+    const harness = await pluginHarness();
+    requestUrl.mockResolvedValue(response(connectionEnvelope()));
+    const path = 'Recap Raven/The Glass Archive/Campaign index.md';
+
+    command(harness, 'create-campaign-index').callback?.();
+    await waitFor(() => notices.some(({ message }) => message === 'Campaign index created.'));
+
+    const index = harness.files.get(path);
+    if (!(index instanceof TFile)) throw new Error('Campaign index was not created.');
+    expect(index.content).toContain('path:"Recap Raven/The Glass Archive/Sessions"');
+
+    command(harness, 'create-campaign-index').callback?.();
+    await waitFor(() => notices.some(({ message }) => message.includes('already exists')));
+
+    expect(harness.files.get(path)).toBe(index);
+    expect(harness.files.has('Recap Raven/The Glass Archive/Campaign index (Recap Raven).md')).toBe(false);
+
+    const userContent = '# My campaign notes\n';
+    harness.files.set(path, new TFile(path, userContent));
+    command(harness, 'create-campaign-index').callback?.();
+    await waitFor(() => notices.some(({ message }) => message.includes('alongside your existing index')));
+
+    expect(harness.files.get(path)).toMatchObject({ content: userContent });
+    const alternatePath = 'Recap Raven/The Glass Archive/Campaign index (Recap Raven).md';
+    const alternate = harness.files.get(alternatePath);
+    expect(alternate).toBeInstanceOf(TFile);
+
+    command(harness, 'create-campaign-index').callback?.();
+    await waitFor(() => notices.some(({ message }) => message.includes('already exists')));
+
+    expect(harness.files.get(path)).toMatchObject({ content: userContent });
+    expect(harness.files.get(alternatePath)).toBe(alternate);
+    expect(requestUrl).toHaveBeenCalledTimes(4);
+  });
 });
 
 async function pluginHarness(): Promise<PluginHarness> {
@@ -104,6 +160,7 @@ async function pluginHarness(): Promise<PluginHarness> {
     vault: {
       getMarkdownFiles: () => [...files.values()].filter((file): file is TFile => file instanceof TFile),
       getAbstractFileByPath: (path) => files.get(path) ?? null,
+      read: vi.fn(async (file: TFile) => file.content),
       create: vi.fn(async (path: string, content: string) => {
         if (files.has(path)) throw new Error('exists');
         const file = new TFile(path, content);

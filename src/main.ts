@@ -41,7 +41,9 @@ import type {
 } from './ui/types';
 import {
   collisionSessionPath,
+  campaignAlternateIndexPath,
   campaignIndexPath,
+  campaignSessionsFolderPath,
   parentFolder,
   sessionNotePath,
 } from './utils/paths';
@@ -83,6 +85,11 @@ export default class RecapRavenPlugin extends Plugin {
       id: 'preview-new-recap-import',
       name: 'Preview new recap import',
       callback: () => void this.previewAllNew(),
+    });
+    this.addCommand({
+      id: 'create-campaign-index',
+      name: 'Create campaign index',
+      callback: () => void this.createCampaignIndexManually(),
     });
     this.addCommand({
       id: 'open-current-recap',
@@ -161,6 +168,18 @@ export default class RecapRavenPlugin extends Plugin {
     }
   }
 
+  private async createCampaignIndexManually(): Promise<void> {
+    if (!this.beginImport()) return;
+    try {
+      const campaign = await this.client().connection();
+      await this.createCampaignIndex(campaign, true);
+    } catch (error) {
+      this.showSafeError(error);
+    } finally {
+      this.importing = false;
+    }
+  }
+
   private beginImport(): boolean {
     if (this.importing) {
       new Notice('A Recap Raven import is already running.');
@@ -197,6 +216,7 @@ export default class RecapRavenPlugin extends Plugin {
       const canonical = sessionNotePath(
         this.pluginSettings.importFolder,
         campaign.name,
+        summary.recorded_at,
         summary.session_number,
         summary.title,
       );
@@ -300,16 +320,55 @@ export default class RecapRavenPlugin extends Plugin {
     };
   }
 
-  private async createCampaignIndex(campaign: Campaign): Promise<void> {
-    if (!this.pluginSettings.createCampaignIndex) return;
-    const path = campaignIndexPath(this.pluginSettings.importFolder, campaign.name);
+  private async createCampaignIndex(campaign: Campaign, manual = false): Promise<void> {
+    if (!manual && !this.pluginSettings.createCampaignIndex) return;
     const vault = this.vaultAdapter();
-    if (await vault.exists(path)) return;
+    const canonicalPath = campaignIndexPath(this.pluginSettings.importFolder, campaign.name);
+    const sessionsFolder = campaignSessionsFolderPath(
+      this.pluginSettings.importFolder,
+      campaign.name,
+    );
+    const content = buildCampaignIndexNote(campaign, sessionsFolder);
+    const canonicalExists = await vault.exists(canonicalPath);
+    if (canonicalExists && !manual) return;
+    if (canonicalExists && await this.indexMatches(canonicalPath, content)) {
+      new Notice('The Recap Raven campaign index already exists and was not changed.');
+      return;
+    }
+    const path = canonicalExists
+      ? campaignAlternateIndexPath(this.pluginSettings.importFolder, campaign.name)
+      : canonicalPath;
+    if (await vault.exists(path)) {
+      const matches = await this.indexMatches(path, content);
+      new Notice(matches
+        ? 'The Recap Raven campaign index already exists and was not changed.'
+        : 'The alternate campaign index destination is occupied and was not changed.');
+      return;
+    }
     try {
       await vault.ensureFolder(parentFolder(path));
-      await vault.createExclusive(path, buildCampaignIndexNote(campaign));
+      const created = await vault.createExclusive(path, content);
+      if (manual) {
+        new Notice(created
+          ? canonicalExists
+            ? 'Recap Raven campaign index created alongside your existing index.'
+            : 'Campaign index created.'
+          : 'The Recap Raven campaign index already exists and was not changed.');
+      }
     } catch {
-      new Notice('Recaps were imported, but the campaign index could not be created.');
+      new Notice(manual
+        ? 'The campaign index could not be created.'
+        : 'Recaps were imported, but the campaign index could not be created.');
+    }
+  }
+
+  private async indexMatches(path: string, expected: string): Promise<boolean> {
+    const file = this.app.vault.getAbstractFileByPath(normalizePath(path));
+    if (!(file instanceof TFile)) return false;
+    try {
+      return await this.app.vault.read(file) === expected;
+    } catch {
+      return false;
     }
   }
 
@@ -352,7 +411,10 @@ export default class RecapRavenPlugin extends Plugin {
 
   private showSafeError(error: unknown): void {
     const safe = asSafeRecapRavenError(error);
-    new Notice(safe.message, 8000);
+    const message = safe.code === 'unauthorized'
+      ? `${safe.message} Open Obsidian Settings → Recap Raven to select a new key.`
+      : safe.message;
+    new Notice(message, 8000);
   }
 }
 

@@ -75,6 +75,33 @@ describe('import modal accessibility', () => {
     close.click();
     await expect(result).resolves.toBe(false);
   });
+
+  it('renders an occupied destination as a warning and shows its alternate path', async () => {
+    const collisionPlan: ImportPlan = {
+      ...plan,
+      items: [{
+        ...plan.items[0]!,
+        state: 'collision',
+        destinationPath: 'Recap Raven/The Glass Archive/Sessions/2026-08-15 - Session 1 - Through the Silver Door [22222222].md',
+      }],
+    };
+    const result = previewImport(
+      app as unknown as App,
+      collisionPlan,
+      ['22222222-2222-4222-8222-222222222222'],
+      false,
+    );
+
+    const warning = document.querySelector('.recap-raven-session-warning');
+    expect(warning?.textContent).toBe('Destination occupied — an alternate filename will be created.');
+    expect(warning?.querySelector('[data-icon="triangle-alert"]')).not.toBeNull();
+    expect(document.querySelector('.recap-raven-plan-action')?.textContent).toContain(
+      '2026-08-15 - Session 1 - Through the Silver Door [22222222].md',
+    );
+
+    button('Close').click();
+    await expect(result).resolves.toBe(false);
+  });
 });
 
 function button(name: string): HTMLButtonElement {

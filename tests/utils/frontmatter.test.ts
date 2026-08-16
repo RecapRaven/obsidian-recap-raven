@@ -47,10 +47,12 @@ describe("frontmatter", () => {
     expect(normalizeTags(["x".repeat(65)])).toEqual([]);
   });
 
-  it("builds an inert deterministic campaign index", () => {
-    const note = buildCampaignIndexNote(campaign);
+  it("builds a safe deterministic campaign index with a scoped vault query", () => {
+    const note = buildCampaignIndexNote(campaign, "Recap Raven/Night/Sessions");
     expect(note).toContain('recap_raven_campaign: "Night:\\n---\\nadmin: true"');
     expect(note).toContain("# Night: \\-\\-\\- admin: true");
+    expect(note).toContain("[Open campaign in Recap Raven](https://recapraven.com/campaigns/223e4567-e89b-42d3-a456-426614174000)");
+    expect(note).toContain('```query\npath:"Recap Raven/Night/Sessions"\n```');
     expect(note.split("\n").filter((line) => line === "---")).toHaveLength(2);
   });
 
@@ -58,7 +60,7 @@ describe("frontmatter", () => {
     const hostileCampaign = { ...campaign, name: "<% run %> {{x}} {% y %} $=dv.current() `= query`" };
     const hostileSession = { ...session, title: "<% title %> $=evil() `= inline`" };
     const note = buildSessionNote(hostileSession, hostileCampaign, ["<% tag %>", "$=tag"]);
-    const index = buildCampaignIndexNote(hostileCampaign);
+    const index = buildCampaignIndexNote(hostileCampaign, "Recap Raven/Safe/Sessions");
 
     for (const value of [note, index]) {
       expect(value).not.toContain("<%");
@@ -68,5 +70,19 @@ describe("frontmatter", () => {
       expect(value).not.toMatch(/`\s*=/);
     }
     expect(neutralizeExecutionDelimiters("safe label")).toBe("safe label");
+  });
+
+  it("keeps the campaign index query inside its generated code fence", () => {
+    const index = buildCampaignIndexNote(
+      campaign,
+      'Recap Raven/Bad"\\`\n```query\npath:"Outside"/Sessions',
+    );
+
+    expect(index.match(/```/gu)).toHaveLength(2);
+    const queryPathLine = index.split("\n").find((line) => line.startsWith('path:"'));
+    expect(queryPathLine).toBeDefined();
+    expect(queryPathLine).not.toContain("`");
+    expect(queryPathLine).not.toContain("\\");
+    expect(queryPathLine?.match(/"/gu)).toHaveLength(2);
   });
 });

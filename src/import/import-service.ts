@@ -136,6 +136,7 @@ export class SessionImportService {
     const canonicalPath = sessionNotePath(
       options.importRoot,
       campaign.name,
+      session.recorded_at,
       session.session_number,
       session.title,
     );

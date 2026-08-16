@@ -51,14 +51,16 @@ export function buildSessionNote(session: Session, campaign: Campaign, tags: rea
 }
 
 /** Content for a create-only index. Callers must never replace an existing index file. */
-export function buildCampaignIndexNote(campaign: Campaign): string {
+export function buildCampaignIndexNote(campaign: Campaign, sessionsFolderPath: string): string {
   const entries: readonly (readonly [string, YamlValue])[] = [
     ["recap_raven_campaign_id", campaign.id],
     ["recap_raven_campaign", neutralizeExecutionDelimiters(campaign.name)],
     ["source_url", campaign.source_url],
   ];
   const lines = entries.map(([key, value]) => `${key}: ${yamlValue(value)}`);
-  return `---\n${lines.join("\n")}\n---\n\n# ${escapeMarkdownText(neutralizeExecutionDelimiters(campaign.name))}\n`;
+  const heading = escapeMarkdownText(neutralizeExecutionDelimiters(campaign.name));
+  const queryPath = sessionsFolderPath.replace(/[\\"`\r\n]/gu, "-");
+  return `---\n${lines.join("\n")}\n---\n\n# ${heading}\n\n[Open campaign in Recap Raven](${campaign.source_url})\n\n## Session recaps\n\nThis list updates automatically as recaps are imported.\n\n\`\`\`query\npath:"${queryPath}"\n\`\`\`\n`;
 }
 
 export function normalizeTags(tags: readonly string[]): readonly string[] {

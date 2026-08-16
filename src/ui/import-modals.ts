@@ -1,4 +1,4 @@
-import { Modal, Setting } from 'obsidian';
+import { Modal, Setting, setIcon } from 'obsidian';
 import type { App } from 'obsidian';
 import type {
   ImportPlan,
@@ -31,8 +31,14 @@ function dateLabel(value: string | null): string {
 
 function stateLabel(item: PlannedImportItem): string {
   if (item.state === 'imported') return `Already imported${item.existingPath ? `: ${item.existingPath}` : ''}`;
-  if (item.state === 'collision') return 'Destination occupied; a safe alternate filename will be used';
   return 'New';
+}
+
+function renderCollisionWarning(container: HTMLElement): void {
+  const warning = container.createDiv({ cls: 'recap-raven-session-warning' });
+  const icon = warning.createSpan({ cls: 'recap-raven-session-warning-icon' });
+  setIcon(icon, 'triangle-alert');
+  warning.createSpan({ text: 'Destination occupied — an alternate filename will be created.' });
 }
 
 export class ImportSelectionModal extends Modal {
@@ -152,8 +158,11 @@ export class ImportSelectionModal extends Modal {
       renderSessionTitle(title, item);
       text.createDiv({
         cls: 'recap-raven-session-meta',
-        text: `${dateLabel(item.recordedAt)} · ${stateLabel(item)}`,
+        text: item.state === 'collision'
+          ? dateLabel(item.recordedAt)
+          : `${dateLabel(item.recordedAt)} · ${stateLabel(item)}`,
       });
+      if (item.state === 'collision') renderCollisionWarning(text);
     }
 
     this.renderFooter();
@@ -211,6 +220,7 @@ export class ImportPreviewModal extends Modal {
       action.append(item.state === 'imported'
         ? ` ${item.existingPath ?? 'already imported'}`
         : ` ${item.destinationPath}`);
+      if (item.state === 'collision') renderCollisionWarning(entry);
     }
     const footer = this.contentEl.createDiv({ cls: 'recap-raven-modal-footer' });
     const buttons = footer.createDiv({ cls: 'recap-raven-inline-actions' });
