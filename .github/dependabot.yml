@@ -3,11 +3,10 @@ updates:
   - package-ecosystem: npm
     directory: /
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
       time: '05:15'
       timezone: Europe/London
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 1
     cooldown:
       default-days: 10
       include:
@@ -32,15 +31,23 @@ updates:
         update-types:
           - minor
           - patch
+    ignore:
+      # Match the compiler's Node API surface to the Node 22 LTS build image.
+      - dependency-name: '@types/node'
+        update-types:
+          - version-update:semver-major
+      # typescript-eslint 8 currently supports TypeScript versions below 6.1.
+      - dependency-name: typescript
+        update-types:
+          - version-update:semver-major
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
       time: '05:30'
       timezone: Europe/London
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 1
     cooldown:
       default-days: 10
       include:
@@ -53,11 +60,10 @@ updates:
   - package-ecosystem: docker
     directory: /
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
       time: '05:45'
       timezone: Europe/London
-    open-pull-requests-limit: 2
+    open-pull-requests-limit: 1
     cooldown:
       default-days: 10
       include:
@@ -66,3 +72,8 @@ updates:
       docker-images:
         patterns:
           - '*'
+    ignore:
+      # Stay on the Node 22 LTS image until a later LTS migration is intentional.
+      - dependency-name: node
+        update-types:
+          - version-update:semver-major
