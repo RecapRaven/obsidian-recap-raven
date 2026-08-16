@@ -261,6 +261,7 @@ export interface MockApp {
   vault: {
     getMarkdownFiles: () => TFile[];
     getAbstractFileByPath: (path: string) => TFile | TFolder | null;
+    read: (file: TFile) => Promise<string>;
     create: (path: string, content: string) => Promise<TFile>;
     createFolder: (path: string) => Promise<TFolder>;
   };
@@ -277,7 +278,9 @@ export function normalizePath(path: string): string {
   return path.replace(/\\/gu, '/').replace(/\/{2,}/gu, '/').replace(/^\.\//u, '');
 }
 
-export function setIcon(_element: HTMLElement, _icon: string): void {}
+export function setIcon(element: HTMLElement, icon: string): void {
+  element.dataset.icon = icon;
+}
 
 export function createFragment(callback?: (fragment: DocumentFragment) => void): DocumentFragment {
   const fragment = document.createDocumentFragment();

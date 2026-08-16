@@ -1,5 +1,5 @@
 const WINDOWS_RESERVED_NAME = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i;
-const INVALID_SEGMENT_CHARACTER = /[<>:"/\\|?*]/g;
+const INVALID_SEGMENT_CHARACTER = /[<>:"/\\|?*`]/g;
 const URI_SCHEME = /^[a-z][a-z0-9+.-]*:/i;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const OBSIDIAN_CONFIG_DIRECTORY = `.${"obsidian"}`;
@@ -64,26 +64,38 @@ export function sanitizePathSegment(input: string | null | undefined, fallback: 
 }
 
 export function sessionFilename(
+  recordedAt: string | null,
   sessionNumber: number | null,
   title: string | null,
 ): string {
   const number = sessionNumber === null ? "Session" : `Session ${sessionNumber}`;
   const safeTitle = sanitizePathSegment(title, number);
-  return safeTitle.toLocaleLowerCase("en-US") === number.toLocaleLowerCase("en-US")
+  const base = safeTitle.toLocaleLowerCase("en-US") === number.toLocaleLowerCase("en-US")
     ? `${number}.md`
     : `${number} - ${safeTitle}.md`;
+  const date = sessionDatePrefix(recordedAt);
+  return date === null ? base : `${date} - ${base}`;
 }
 
 export function sessionNotePath(
   importRoot: string,
   campaignName: string,
+  recordedAt: string | null,
   sessionNumber: number | null,
   title: string | null,
 ): string {
   const root = normalizeImportRoot(importRoot);
-  const path = `${campaignFolderPath(importRoot, campaignName)}/Sessions/${sessionFilename(sessionNumber, title)}`;
+  const path = `${campaignSessionsFolderPath(importRoot, campaignName)}/${sessionFilename(recordedAt, sessionNumber, title)}`;
   assertContainedPath(root, path);
   return path;
+}
+
+function sessionDatePrefix(recordedAt: string | null): string | null {
+  const match = /^(\d{4}-\d{2}-\d{2})(?:T|$)/u.exec(recordedAt ?? "");
+  if (match?.[1] === undefined) return null;
+  const date = match[1];
+  const parsed = new Date(`${date}T00:00:00Z`);
+  return Number.isNaN(parsed.valueOf()) || !parsed.toISOString().startsWith(date) ? null : date;
 }
 
 export function campaignFolderPath(importRoot: string, campaignName: string): string {
@@ -96,6 +108,14 @@ export function campaignFolderPath(importRoot: string, campaignName: string): st
 
 export function campaignIndexPath(importRoot: string, campaignName: string): string {
   return `${campaignFolderPath(importRoot, campaignName)}/Campaign index.md`;
+}
+
+export function campaignAlternateIndexPath(importRoot: string, campaignName: string): string {
+  return `${campaignFolderPath(importRoot, campaignName)}/Campaign index (Recap Raven).md`;
+}
+
+export function campaignSessionsFolderPath(importRoot: string, campaignName: string): string {
+  return `${campaignFolderPath(importRoot, campaignName)}/Sessions`;
 }
 
 export function collisionSessionPath(path: string, sessionId: string): string {

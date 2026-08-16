@@ -15,7 +15,7 @@ The integration is deliberately small. It downloads completed player recaps from
 - Detect previous imports by stable Recap Raven session ID, even after a note is moved or renamed.
 - Protect path collisions with deterministic alternate filenames.
 - Add campaign, session, date, source, and content-hash properties.
-- Optionally create a campaign index without changing an existing index.
+- Optionally create a campaign index with a live Obsidian query, without changing an existing index.
 - Open an imported recap in Recap Raven from the command palette.
 - No background sync, vault uploads, client-side telemetry, or advertisements.
 
@@ -49,13 +49,16 @@ Select the download icon in the ribbon, or open the command palette and run one 
 - **Import session recaps** — search and select individual recaps, preview the plan, then import.
 - **Import all new recaps** — select every recap not already present in the vault and review the plan.
 - **Preview new recap import** — show a dry-run plan without offering to write files.
+- **Create campaign index** — create the live-query index without changing an existing file. When `Campaign index.md` contains different content, the plugin creates `Campaign index (Recap Raven).md` alongside it.
 - **Open current imported recap** — available when the active note contains a valid Recap Raven session ID.
 
 By default, notes are created under:
 
 ```text
-Recap Raven/<Campaign name>/Sessions/Session <number> - <Title>.md
+Recap Raven/<Campaign name>/Sessions/YYYY-MM-DD - Session <number> - <Title>.md
 ```
+
+The recorded-date prefix keeps notes in chronological filename order. When a recorded date is unavailable, the filename begins with the session number instead.
 
 If a destination is already occupied by an unrelated note, the importer uses a stable short session-ID suffix. If the session ID is already present anywhere in the vault, the recap is skipped. Files are never overwritten, updated, renamed, moved, or deleted.
 
@@ -86,7 +89,8 @@ This integration requires a Recap Raven account and a campaign-bound export key.
 - select **Create an export key** in settings;
 - select **Test connection**;
 - open or preview an import;
-- import recaps; or
+- import recaps;
+- create a campaign index; or
 - explicitly open a recap in Recap Raven.
 
 API requests are sent only to `https://api.recapraven.com`. They use read-only endpoints to download the bound campaign's player-safe metadata and recap Markdown. Requests include the export credential and ordinary connection and request metadata. Recap Raven keeps limited operational and security logs, including API-key use and IP-related security events, as described in the [Recap Raven Privacy Policy](https://recapraven.com/privacy).

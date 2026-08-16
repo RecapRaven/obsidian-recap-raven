@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   collisionSessionPath,
+  campaignAlternateIndexPath,
   campaignIndexPath,
+  campaignSessionsFolderPath,
   normalizeImportRoot,
   sanitizePathSegment,
   sessionNotePath,
@@ -27,14 +29,38 @@ describe("vault path policy", () => {
   });
 
   it("builds a contained deterministic note path", () => {
-    expect(sessionNotePath("Recap Raven", "Glass/Archive", 7, "Midnight: Archive")).toBe(
-      "Recap Raven/Glass-Archive/Sessions/Session 7 - Midnight-Archive.md",
+    expect(sessionNotePath("Recap Raven", "Glass/Archive", "2026-08-16T19:00:00Z", 7, "Midnight: Archive")).toBe(
+      "Recap Raven/Glass-Archive/Sessions/2026-08-16 - Session 7 - Midnight-Archive.md",
+    );
+  });
+
+  it("falls back to the session-first filename when the recorded date is unavailable", () => {
+    expect(sessionNotePath("Recap Raven", "Glass Archive", null, 7, "Midnight Archive")).toBe(
+      "Recap Raven/Glass Archive/Sessions/Session 7 - Midnight Archive.md",
+    );
+  });
+
+  it("does not place an invalid recorded date in a filename", () => {
+    expect(sessionNotePath("Recap Raven", "Glass Archive", "2026-02-30T19:00:00Z", 7, null)).toBe(
+      "Recap Raven/Glass Archive/Sessions/Session 7.md",
     );
   });
 
   it("places a create-only campaign index outside the sessions folder", () => {
     expect(campaignIndexPath("Recap Raven", "Glass/Archive")).toBe(
       "Recap Raven/Glass-Archive/Campaign index.md",
+    );
+  });
+
+  it("provides a deterministic alternate index path for an occupied user index", () => {
+    expect(campaignAlternateIndexPath("Recap Raven", "Glass/Archive")).toBe(
+      "Recap Raven/Glass-Archive/Campaign index (Recap Raven).md",
+    );
+  });
+
+  it("provides the campaign sessions folder for the dynamic index query", () => {
+    expect(campaignSessionsFolderPath("Recap Raven", "Glass/Archive")).toBe(
+      "Recap Raven/Glass-Archive/Sessions",
     );
   });
 
