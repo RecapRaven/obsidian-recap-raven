@@ -18,7 +18,7 @@ Please include:
 - reproducible steps using synthetic data; and
 - any suggested mitigation.
 
-We will acknowledge a complete report within five business days, investigate it, and coordinate remediation and disclosure with the reporter. Please allow a reasonable remediation period before publishing details.
+We review complete reports, investigate them, and coordinate remediation and disclosure with the reporter on a best-effort basis. We do not offer a response, remediation, or disclosure SLA or SLO. Please allow a reasonable remediation period before publishing details.
 
 ## Scope
 
