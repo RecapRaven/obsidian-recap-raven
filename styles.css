@@ -1,0 +1,102 @@
+.recap-raven-modal {
+  width: min(48rem, calc(100vw - 2rem));
+}
+
+.recap-raven-campaign {
+  color: var(--text-muted);
+  margin-block: 0 var(--size-4-3);
+}
+
+.recap-raven-inline-actions,
+.recap-raven-modal-footer {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-4-2);
+}
+
+.recap-raven-session-list {
+  border-block: 1px solid var(--background-modifier-border);
+  margin-block: var(--size-4-3);
+  max-height: min(24rem, 50vh);
+  overflow-y: auto;
+}
+
+.recap-raven-session-row {
+  align-items: flex-start;
+  border-bottom: 1px solid var(--background-modifier-border);
+  cursor: pointer;
+  display: flex;
+  gap: var(--size-4-3);
+  padding: var(--size-4-3);
+}
+
+.recap-raven-session-row:last-child {
+  border-bottom: 0;
+}
+
+.recap-raven-session-row:hover {
+  background: var(--background-modifier-hover);
+}
+
+.recap-raven-session-row:has(input:focus-visible) {
+  box-shadow: inset 0 0 0 2px var(--interactive-accent);
+}
+
+.recap-raven-session-row input {
+  flex: 0 0 auto;
+  margin-top: var(--size-2-1);
+}
+
+.recap-raven-session-row-text {
+  min-width: 0;
+}
+
+.recap-raven-session-title {
+  color: var(--text-normal);
+  font-weight: var(--font-semibold);
+  overflow-wrap: anywhere;
+}
+
+.recap-raven-session-meta,
+.recap-raven-empty {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  overflow-wrap: anywhere;
+}
+
+.recap-raven-empty {
+  padding: var(--size-4-3);
+}
+
+.recap-raven-modal-footer {
+  border-top: 1px solid var(--background-modifier-border);
+  justify-content: space-between;
+  margin-top: var(--size-4-4);
+  padding-top: var(--size-4-3);
+}
+
+.recap-raven-plan-list,
+.recap-raven-summary-list {
+  max-height: min(20rem, 45vh);
+  overflow-y: auto;
+  padding-inline-start: var(--size-4-6);
+}
+
+.recap-raven-plan-list li,
+.recap-raven-summary-list li {
+  margin-block: var(--size-2-2);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 480px) {
+  .recap-raven-modal-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .recap-raven-modal-footer .recap-raven-inline-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

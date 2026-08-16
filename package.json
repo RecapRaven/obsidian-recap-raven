@@ -1,0 +1,53 @@
+{
+  "name": "recap-raven",
+  "version": "1.0.0",
+  "description": "Import player-safe Recap Raven session recaps into your Obsidian vault.",
+  "private": true,
+  "main": "main.js",
+  "type": "module",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "typecheck": "tsc --noEmit --skipLibCheck",
+    "lint": "eslint . --max-warnings=0",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "build": "npm run typecheck && node esbuild.config.mjs production",
+    "verify:release": "node scripts/verify-release.mjs",
+    "check": "npm run lint && npm run test:coverage && npm run build && npm run verify:release",
+    "version": "node version-bump.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "keywords": [
+    "obsidian",
+    "ttrpg",
+    "campaign",
+    "session-recap"
+  ],
+  "author": "Recap Raven",
+  "homepage": "https://recapraven.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/RecapRaven/obsidian-recap-raven.git"
+  },
+  "bugs": {
+    "url": "https://github.com/RecapRaven/obsidian-recap-raven/issues"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "@types/node": "^22.18.0",
+    "@vitest/coverage-v8": "^3.2.4",
+    "esbuild": "^0.25.9",
+    "eslint": "^9.39.4",
+    "eslint-plugin-obsidianmd": "^0.4.0",
+    "globals": "^16.3.0",
+    "happy-dom": "^20.11.2",
+    "jiti": "^2.6.1",
+    "obsidian": "^1.11.4",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.41.0",
+    "vitest": "^3.2.4"
+  }
+}

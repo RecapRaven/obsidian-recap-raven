@@ -1,0 +1,16 @@
+node_modules
+coverage
+main.js
+main.js.map
+.git
+*.log
+.env
+.env.*
+.npmrc
+*.pem
+*.key
+.idea
+.vscode
+.obsidian
+test-vault
+data.json

@@ -1,0 +1,10 @@
+{
+  "id": "recap-raven",
+  "name": "Recap Raven",
+  "version": "1.0.0",
+  "minAppVersion": "1.11.4",
+  "description": "Import player-safe Recap Raven session recaps into your vault.",
+  "author": "Recap Raven",
+  "authorUrl": "https://recapraven.com",
+  "isDesktopOnly": true
+}

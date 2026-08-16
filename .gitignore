@@ -1,0 +1,17 @@
+node_modules/
+main.js
+main.js.map
+coverage/
+*.log
+.DS_Store
+.env
+.env.*
+!.env.example
+.npmrc
+*.pem
+*.key
+.idea/
+.vscode/
+.obsidian/
+test-vault/
+data.json
