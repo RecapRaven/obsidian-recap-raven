@@ -32,12 +32,26 @@ updates:
           - minor
           - patch
     ignore:
+      # eslint-plugin-obsidianmd 0.4 requires the ESLint 9 @eslint/js API.
+      - dependency-name: eslint
+        update-types:
+          - version-update:semver-major
+      - dependency-name: '@eslint/js'
+        update-types:
+          - version-update:semver-major
       # Match the compiler's Node API surface to the Node 22 LTS build image.
       - dependency-name: '@types/node'
         update-types:
           - version-update:semver-major
       # typescript-eslint 8 currently supports TypeScript versions below 6.1.
       - dependency-name: typescript
+        update-types:
+          - version-update:semver-major
+      # Vitest 4's coverage semantics do not currently meet the existing gates.
+      - dependency-name: vitest
+        update-types:
+          - version-update:semver-major
+      - dependency-name: '@vitest/coverage-v8'
         update-types:
           - version-update:semver-major
 
