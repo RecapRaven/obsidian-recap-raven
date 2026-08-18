@@ -20,9 +20,16 @@ import type {
   ImportBatchResult,
   ImportErrorClassification,
 } from './import/import-service';
-import { buildSessionIdentityIndex } from './import/session-identity';
+import {
+  buildSessionIdentityIndex,
+  sessionIdFromFrontmatter,
+} from './import/session-identity';
 import type { SessionIdentityIndex } from './import/session-identity';
 import { RecapRavenSettingTab } from './settings/settings-tab';
+import {
+  normalizePluginData,
+  serializePluginData,
+} from './settings/plugin-data';
 import {
   DEFAULT_SETTINGS,
   normalizeSettings,
@@ -44,6 +51,7 @@ import {
   campaignAlternateIndexPath,
   campaignIndexPath,
   campaignSessionsFolderPath,
+  normalizeImportRoot,
   parentFolder,
   sessionNotePath,
 } from './utils/paths';
@@ -60,10 +68,15 @@ interface ImportContext {
 
 export default class RecapRavenPlugin extends Plugin {
   private pluginSettings: RecapRavenSettings = DEFAULT_SETTINGS;
+  private identities: SessionIdentityIndex = buildSessionIdentityIndex();
   private importing = false;
+  private pendingSave: Promise<void> = Promise.resolve();
 
   async onload(): Promise<void> {
-    this.pluginSettings = normalizeSettings(await this.loadData());
+    const data = normalizePluginData(await this.loadData());
+    this.pluginSettings = data.settings;
+    this.identities = buildSessionIdentityIndex([], data.sessionIdentities);
+    this.registerIdentityEvents();
     this.addSettingTab(new RecapRavenSettingTab(this.app, this));
 
     const ribbon = this.addRibbonIcon('download', 'Import session recaps', () => {
@@ -107,7 +120,7 @@ export default class RecapRavenPlugin extends Plugin {
 
   async updateSettings(patch: Partial<RecapRavenSettings>): Promise<void> {
     this.pluginSettings = normalizeSettings({ ...this.pluginSettings, ...patch });
-    await this.saveData(this.pluginSettings);
+    await this.persistPluginData();
   }
 
   getPluginSettings(): RecapRavenSettings {
@@ -193,16 +206,12 @@ export default class RecapRavenPlugin extends Plugin {
     const client = this.client();
     const campaign = await client.connection();
     const summaries = await client.listAllSessions(campaign.id);
-    const identities = this.identityIndex();
-    const plan = await this.buildPlan(campaign, summaries, identities);
-    return { campaign, summaries, identities, plan };
-  }
-
-  private identityIndex(): SessionIdentityIndex {
-    return buildSessionIdentityIndex(this.app.vault.getMarkdownFiles().map((file) => ({
-      path: file.path,
-      frontmatter: this.app.metadataCache.getFileCache(file)?.frontmatter ?? null,
-    })));
+    const reconciled = this.reconcileKnownIdentities();
+    const migrated = this.migrateCampaignIdentities(campaign);
+    const changed = reconciled || migrated;
+    if (changed) await this.persistPluginData();
+    const plan = await this.buildPlan(campaign, summaries, this.identities);
+    return { campaign, summaries, identities: this.identities, plan };
   }
 
   private async buildPlan(
@@ -272,6 +281,7 @@ export default class RecapRavenPlugin extends Plugin {
     } finally {
       progress.close();
     }
+    await this.persistPluginData();
     if (result.imported > 0) {
       await this.createCampaignIndex(context.campaign);
     }
@@ -407,6 +417,93 @@ export default class RecapRavenPlugin extends Plugin {
     } catch {
       return null;
     }
+  }
+
+  private registerIdentityEvents(): void {
+    this.registerEvent(this.app.vault.on('rename', (file, oldPath) => {
+      const changed = file instanceof TFolder
+        ? this.identities.renamePathsUnder(oldPath, file.path)
+        : this.identities.renamePath(oldPath, file.path);
+      if (changed) this.persistIdentityEvent();
+    }));
+    this.registerEvent(this.app.vault.on('delete', (file) => {
+      const changed = file instanceof TFolder
+        ? this.identities.removePathsUnder(file.path)
+        : this.identities.removePath(file.path);
+      if (changed) this.persistIdentityEvent();
+    }));
+    this.registerEvent(this.app.metadataCache.on('changed', (file, _data, cache) => {
+      if (!this.identities.hasPath(file.path) && !this.isManagedImportPath(file.path)) return;
+      const sessionId = sessionIdFromFrontmatter(cache.frontmatter);
+      const changed = sessionId === null
+        ? this.identities.removePath(file.path)
+        : this.identities.add(sessionId, file.path);
+      if (changed) this.persistIdentityEvent();
+    }));
+  }
+
+  private reconcileKnownIdentities(): boolean {
+    let changed = false;
+    for (const identity of this.identities.entries()) {
+      const file = this.app.vault.getAbstractFileByPath(normalizePath(identity.path));
+      if (!(file instanceof TFile)) {
+        changed = this.identities.removePath(identity.path) || changed;
+        continue;
+      }
+      const cache = this.app.metadataCache.getFileCache(file);
+      if (cache === null) continue;
+      const actualId = sessionIdFromFrontmatter(cache.frontmatter);
+      if (actualId !== identity.sessionId) {
+        changed = this.identities.removePath(identity.path) || changed;
+        if (actualId !== null) changed = this.identities.add(actualId, identity.path) || changed;
+      }
+    }
+    return changed;
+  }
+
+  /** One-time-compatible discovery is deliberately limited to this campaign's managed sessions folder. */
+  private migrateCampaignIdentities(campaign: Campaign): boolean {
+    const folderPath = campaignSessionsFolderPath(this.pluginSettings.importFolder, campaign.name);
+    const folder = this.app.vault.getAbstractFileByPath(normalizePath(folderPath));
+    if (!(folder instanceof TFolder)) return false;
+    const pending = [...folder.children];
+    let changed = false;
+    while (pending.length > 0) {
+      const item = pending.pop();
+      if (item instanceof TFolder) {
+        pending.push(...item.children);
+      } else if (item instanceof TFile) {
+        const sessionId = sessionIdFromFrontmatter(this.app.metadataCache.getFileCache(item)?.frontmatter);
+        if (sessionId !== null) changed = this.identities.add(sessionId, item.path) || changed;
+      }
+    }
+    return changed;
+  }
+
+  private isManagedImportPath(path: string): boolean {
+    try {
+      const root = normalizeImportRoot(this.pluginSettings.importFolder);
+      return path === root || path.startsWith(`${root}/`);
+    } catch {
+      return false;
+    }
+  }
+
+  private persistIdentityEvent(): void {
+    void this.persistPluginData().catch(() => {
+      new Notice('Recap Raven could not save its import index. Your notes were not changed.', 8000);
+    });
+  }
+
+  private persistPluginData(): Promise<void> {
+    const save = async (): Promise<void> => {
+      await this.saveData(serializePluginData({
+        settings: this.pluginSettings,
+        sessionIdentities: this.identities.entries(),
+      }));
+    };
+    this.pendingSave = this.pendingSave.catch(() => undefined).then(save);
+    return this.pendingSave;
   }
 
   private showSafeError(error: unknown): void {

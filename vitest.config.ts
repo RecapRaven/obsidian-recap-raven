@@ -20,6 +20,7 @@ export default defineConfig({
         'src/import/import-service.ts',
         'src/import/session-identity.ts',
         'src/main.ts',
+        'src/settings/plugin-data.ts',
         'src/settings/settings.ts',
         'src/settings/settings-tab.ts',
         'src/ui/**/*.ts',

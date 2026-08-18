@@ -25,6 +25,13 @@ interface PluginHarness {
   files: Map<string, TFile | TFolder>;
   secret: ReturnType<typeof vi.fn<(name: string) => string | null>>;
   commands: MockCommand[];
+  vaultEvents: {
+    rename?: (file: TFile | TFolder, oldPath: string) => void;
+    delete?: (file: TFile | TFolder) => void;
+  };
+  metadataEvents: {
+    changed?: (file: TFile, data: string, cache: { frontmatter?: Record<string, unknown> }) => void;
+  };
 }
 
 describe('production plugin orchestration', () => {
@@ -150,15 +157,174 @@ describe('production plugin orchestration', () => {
     expect(harness.files.get(alternatePath)).toBe(alternate);
     expect(requestUrl).toHaveBeenCalledTimes(4);
   });
+
+  it('persists imported identities and follows vault rename and delete events without enumerating the vault', async () => {
+    const harness = await pluginHarness();
+    requestUrl
+      .mockResolvedValueOnce(response(connectionEnvelope()))
+      .mockResolvedValueOnce(response(sessionPage([sessionSummary(SESSION_IDS[0], 1)])))
+      .mockResolvedValueOnce(response(await sessionEnvelope(SESSION_IDS[0], 1)));
+
+    command(harness, 'import-all-new-recaps').callback?.();
+    await waitFor(() => findButton('Import selected') !== null);
+    button('Import selected').click();
+    await waitFor(() => document.body.textContent?.includes('1 imported') === true);
+
+    const originalPath = 'Recap Raven/The Glass Archive/Sessions/2026-08-11 - Session 1 - Through the Silver Door.md';
+    const imported = harness.files.get(originalPath);
+    if (!(imported instanceof TFile)) throw new Error('Imported note was not created.');
+    expect(identityPaths(harness.plugin)).toEqual([originalPath]);
+
+    harness.files.delete(originalPath);
+    imported.path = 'Campaign notes/Renamed recap.md';
+    harness.files.set(imported.path, imported);
+    harness.vaultEvents.rename?.(imported, originalPath);
+    await waitFor(() => identityPaths(harness.plugin)[0] === imported.path);
+    expect(identityPaths(harness.plugin)).toEqual(['Campaign notes/Renamed recap.md']);
+
+    harness.files.delete(imported.path);
+    harness.vaultEvents.delete?.(imported);
+    await waitFor(() => identityPaths(harness.plugin).length === 0);
+  });
+
+  it('rebases and removes imported identities when a parent folder is moved or deleted', async () => {
+    const initialData = pluginData([
+      { sessionId: SESSION_IDS[0], path: 'Recap Raven/The Glass Archive/Sessions/One.md' },
+      { sessionId: SESSION_IDS[1], path: 'Recap Raven/The Glass Archive/Sessions/Nested/Two.md' },
+    ]);
+    const harness = await pluginHarness({ data: initialData });
+    const movedFolder = new TFolder('Archive/Glass Archive');
+
+    harness.vaultEvents.rename?.(movedFolder, 'Recap Raven/The Glass Archive/Sessions');
+    await waitFor(() => identityPaths(harness.plugin).includes('Archive/Glass Archive/One.md'));
+
+    expect(identityPaths(harness.plugin)).toEqual([
+      'Archive/Glass Archive/One.md',
+      'Archive/Glass Archive/Nested/Two.md',
+    ]);
+
+    harness.vaultEvents.delete?.(movedFolder);
+    await waitFor(() => identityPaths(harness.plugin).length === 0);
+  });
+
+  it('persists metadata identity changes and resumes a failed save on the next event', async () => {
+    const path = 'Recap Raven/The Glass Archive/Sessions/One.md';
+    const file = new TFile(path);
+    const files = new Map<string, TFile | TFolder>([[path, file]]);
+    const harness = await pluginHarness({
+      data: pluginData([{ sessionId: SESSION_IDS[0], path }]),
+      files,
+    });
+    const save = vi.spyOn(harness.plugin, 'saveData')
+      .mockRejectedValueOnce(new Error('disk unavailable'))
+      .mockImplementation(async (value: unknown) => {
+        (harness.plugin as unknown as { data: unknown }).data = value;
+      });
+
+    harness.metadataEvents.changed?.(file, '', {
+      frontmatter: { recap_raven_session_id: SESSION_IDS[1] },
+    });
+    await waitFor(() => notices.some(({ message }) => message.includes('could not save its import index')));
+    harness.metadataEvents.changed?.(file, '', {
+      frontmatter: { recap_raven_session_id: SESSION_IDS[2] },
+    });
+    await waitFor(() => identityPaths(harness.plugin).length === 1
+      && identityPaths(harness.plugin)[0] === path
+      && save.mock.calls.length === 2);
+
+    expect((harness.plugin as unknown as {
+      data: { sessionIdentities: Array<{ sessionId: string }> };
+    }).data.sessionIdentities[0]?.sessionId).toBe(SESSION_IDS[2]);
+  });
+
+  it('reloads the persisted identity index and keeps a moved recap marked as imported', async () => {
+    const movedPath = 'Campaign notes/Moved recap.md';
+    const moved = new TFile(movedPath);
+    const harness = await pluginHarness({
+      data: pluginData([{ sessionId: SESSION_IDS[0], path: movedPath }]),
+      files: new Map([[movedPath, moved]]),
+    });
+    requestUrl
+      .mockResolvedValueOnce(response(connectionEnvelope()))
+      .mockResolvedValueOnce(response(sessionPage([sessionSummary(SESSION_IDS[0], 1)])));
+
+    command(harness, 'import-session-recaps').callback?.();
+    await waitFor(() => document.querySelector('[role="dialog"]') !== null);
+
+    expect(document.body.textContent).toContain('Already imported');
+    expect(requestUrl).toHaveBeenCalledTimes(2);
+  });
+
+  it('reconciles missing and changed indexed notes before planning an import', async () => {
+    const actualPath = 'Recap Raven/The Glass Archive/Sessions/Changed.md';
+    const missingPath = 'Recap Raven/The Glass Archive/Sessions/Missing.md';
+    const files = new Map<string, TFile | TFolder>();
+    const root = addFolder(files, 'Recap Raven');
+    const campaign = addFolder(files, 'Recap Raven/The Glass Archive', root);
+    const sessions = addFolder(files, 'Recap Raven/The Glass Archive/Sessions', campaign);
+    const changed = new TFile(actualPath);
+    sessions.children.push(changed);
+    files.set(actualPath, changed);
+    const harness = await pluginHarness({
+      data: pluginData([
+        { sessionId: SESSION_IDS[1], path: actualPath },
+        { sessionId: SESSION_IDS[2], path: missingPath },
+      ]),
+      files,
+    });
+    harness.app.metadataCache.getFileCache = vi.fn((file: TFile) => file === changed
+      ? { frontmatter: { recap_raven_session_id: SESSION_IDS[0] } }
+      : null);
+    requestUrl
+      .mockResolvedValueOnce(response(connectionEnvelope()))
+      .mockResolvedValueOnce(response(sessionPage([sessionSummary(SESSION_IDS[0], 1)])));
+
+    command(harness, 'import-session-recaps').callback?.();
+    await waitFor(() => document.querySelector('[role="dialog"]') !== null);
+
+    expect(document.body.textContent).toContain('Already imported');
+    expect((harness.plugin as unknown as {
+      data: { sessionIdentities: Array<{ sessionId: string; path: string }> };
+    }).data.sessionIdentities).toEqual([{ sessionId: SESSION_IDS[0], path: actualPath }]);
+  });
+
+  it('migrates prior imports only from the managed campaign sessions folder', async () => {
+    const harness = await pluginHarness();
+    const root = addFolder(harness.files, 'Recap Raven');
+    const campaign = addFolder(harness.files, 'Recap Raven/The Glass Archive', root);
+    const sessions = addFolder(harness.files, 'Recap Raven/The Glass Archive/Sessions', campaign);
+    const nested = addFolder(harness.files, 'Recap Raven/The Glass Archive/Sessions/Archive', sessions);
+    const oldImport = new TFile('Recap Raven/The Glass Archive/Sessions/Archive/User renamed.md');
+    const unrelated = new TFile('Private/Unrelated.md');
+    nested.children.push(oldImport);
+    harness.files.set(oldImport.path, oldImport);
+    harness.files.set(unrelated.path, unrelated);
+    harness.app.metadataCache.getFileCache = vi.fn((file: TFile) => file === oldImport || file === unrelated
+      ? { frontmatter: { recap_raven_session_id: SESSION_IDS[0] } }
+      : null);
+    requestUrl
+      .mockResolvedValueOnce(response(connectionEnvelope()))
+      .mockResolvedValueOnce(response(sessionPage([sessionSummary(SESSION_IDS[0], 1)])));
+
+    command(harness, 'import-session-recaps').callback?.();
+    await waitFor(() => document.querySelector('[role="dialog"]') !== null);
+
+    expect(document.body.textContent).toContain('Already imported');
+    expect(identityPaths(harness.plugin)).toEqual([oldImport.path]);
+  });
 });
 
-async function pluginHarness(): Promise<PluginHarness> {
-  const files = new Map<string, TFile | TFolder>();
+async function pluginHarness(options: {
+  data?: unknown;
+  files?: Map<string, TFile | TFolder>;
+} = {}): Promise<PluginHarness> {
+  const files = options.files ?? new Map<string, TFile | TFolder>();
   const secret = vi.fn<(name: string) => string | null>().mockReturnValue(KEY);
+  const vaultEvents: PluginHarness['vaultEvents'] = {};
+  const metadataEvents: PluginHarness['metadataEvents'] = {};
   const app: MockApp = {
     secretStorage: { getSecret: secret },
     vault: {
-      getMarkdownFiles: () => [...files.values()].filter((file): file is TFile => file instanceof TFile),
       getAbstractFileByPath: (path) => files.get(path) ?? null,
       read: vi.fn(async (file: TFile) => file.content),
       create: vi.fn(async (path: string, content: string) => {
@@ -171,10 +337,27 @@ async function pluginHarness(): Promise<PluginHarness> {
         if (files.has(path)) throw new Error('exists');
         const folder = new TFolder(path);
         files.set(path, folder);
+        const parentPath = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
+        const parent = files.get(parentPath);
+        if (parent instanceof TFolder) parent.children.push(folder);
         return folder;
       }),
+      on: (name, callback) => {
+        if (name === 'rename') {
+          vaultEvents.rename = callback as unknown as NonNullable<PluginHarness['vaultEvents']['rename']>;
+        } else {
+          vaultEvents.delete = callback as unknown as NonNullable<PluginHarness['vaultEvents']['delete']>;
+        }
+        return {};
+      },
     },
-    metadataCache: { getFileCache: () => null },
+    metadataCache: {
+      getFileCache: () => null,
+      on: (_name, callback) => {
+        metadataEvents.changed = callback as unknown as NonNullable<PluginHarness['metadataEvents']['changed']>;
+        return {};
+      },
+    },
     workspace: {
       getActiveViewOfType: () => new MarkdownView(null),
       getLeaf: () => ({ openFile: vi.fn(async () => undefined) }),
@@ -184,7 +367,7 @@ async function pluginHarness(): Promise<PluginHarness> {
     app as unknown as App,
     { id: 'recap-raven', name: 'Recap Raven', version: '1.0.0', minAppVersion: '1.11.4' } as PluginManifest,
   );
-  (plugin as unknown as { data: unknown }).data = {
+  (plugin as unknown as { data: unknown }).data = options.data ?? {
     secretName: 'rr-export-key',
     importFolder: 'Recap Raven',
     tags: ['recap-raven'],
@@ -192,7 +375,30 @@ async function pluginHarness(): Promise<PluginHarness> {
   };
   await plugin.onload();
   const commands = (plugin as unknown as { commands: MockCommand[] }).commands;
-  return { plugin, app, files, secret, commands };
+  return { plugin, app, files, secret, commands, vaultEvents, metadataEvents };
+}
+
+function pluginData(sessionIdentities: Array<{ sessionId: string; path: string }>): unknown {
+  return {
+    secretName: 'rr-export-key',
+    importFolder: 'Recap Raven',
+    tags: ['recap-raven'],
+    createCampaignIndex: true,
+    sessionIdentityVersion: 1,
+    sessionIdentities,
+  };
+}
+
+function identityPaths(plugin: RecapRavenPlugin): string[] {
+  const data = (plugin as unknown as { data: { sessionIdentities?: Array<{ path: string }> } }).data;
+  return data.sessionIdentities?.map(({ path }) => path) ?? [];
+}
+
+function addFolder(files: Map<string, TFile | TFolder>, path: string, parent?: TFolder): TFolder {
+  const folder = new TFolder(path);
+  files.set(path, folder);
+  parent?.children.push(folder);
+  return folder;
 }
 
 function command(harness: PluginHarness, id: string): MockCommand {
