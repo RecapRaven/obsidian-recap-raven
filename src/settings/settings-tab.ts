@@ -1,5 +1,5 @@
 import { PluginSettingTab, SecretComponent, Setting, normalizePath } from 'obsidian';
-import type { App, Plugin } from 'obsidian';
+import type { App, Plugin, SettingDefinitionItem } from 'obsidian';
 import type { RecapRavenSettings } from './settings';
 
 const API_KEYS_URL = 'https://recapraven.com/account/api-keys';
@@ -18,47 +18,92 @@ export class RecapRavenSettingTab extends PluginSettingTab {
     super(app, host);
   }
 
+  getSettingDefinitions(): SettingDefinitionItem[] {
+    return [
+      {
+        name: 'Recap Raven export API key',
+        desc: this.apiKeyDescription(),
+        render: (setting) => {
+          this.addSecretControl(setting, () => this.refreshDeclarativeSettings());
+        },
+      },
+      {
+        name: 'Connection',
+        desc: this.connectionMessage,
+        render: (setting) => {
+          this.addConnectionButton(setting, () => this.refreshDeclarativeSettings());
+        },
+      },
+      {
+        name: 'Import folder',
+        desc: 'Recaps are created inside a campaign folder. Existing notes are never overwritten.',
+        control: {
+          type: 'text',
+          key: 'importFolder',
+          placeholder: 'Recap Raven',
+        },
+      },
+      {
+        name: 'Tags',
+        desc: 'Comma-separated tags added to imported recap properties.',
+        control: {
+          type: 'text',
+          key: 'tags',
+          placeholder: 'recap-raven, session-recap',
+        },
+      },
+      {
+        name: 'Create campaign index',
+        desc: 'Create a campaign index when one does not already exist. Existing indexes are never changed.',
+        control: {
+          type: 'toggle',
+          key: 'createCampaignIndex',
+        },
+      },
+    ];
+  }
+
+  getControlValue(key: string): unknown {
+    const settings = this.host.getPluginSettings();
+    if (key === 'tags') return settings.tags.join(', ');
+    if (key === 'importFolder') return settings.importFolder;
+    if (key === 'createCampaignIndex') return settings.createCampaignIndex;
+    return undefined;
+  }
+
+  async setControlValue(key: string, value: unknown): Promise<void> {
+    if (key === 'importFolder' && typeof value === 'string') {
+      await this.host.updateSettings({ importFolder: this.normalizeImportFolder(value) });
+      return;
+    }
+    if (key === 'tags' && typeof value === 'string') {
+      await this.host.updateSettings({ tags: this.parseTags(value) });
+      return;
+    }
+    if (key === 'createCampaignIndex' && typeof value === 'boolean') {
+      await this.host.updateSettings({ createCampaignIndex: value });
+      return;
+    }
+    throw new TypeError(`Unsupported setting control: ${key}`);
+  }
+
   display(): void {
+    this.renderLegacySettings();
+  }
+
+  private renderLegacySettings(): void {
     const { containerEl } = this;
     containerEl.empty();
 
-    new Setting(containerEl)
+    const apiKeySetting = new Setting(containerEl)
       .setName('Recap Raven export API key')
-      .setDesc(this.apiKeyDescription())
-      .addComponent((element) => {
-        return new SecretComponent(this.app, element)
-          .setValue(this.host.getPluginSettings().secretName)
-          .onChange(async (value) => {
-            this.connectionMessage = 'Not checked';
-            await this.host.updateSettings({ secretName: value });
-            this.display();
-          });
-      });
+      .setDesc(this.apiKeyDescription());
+    this.addSecretControl(apiKeySetting, () => this.renderLegacySettings());
 
-    new Setting(containerEl)
+    const connectionSetting = new Setting(containerEl)
       .setName('Connection')
-      .setDesc(this.connectionMessage)
-      .addButton((button) => {
-        button
-          .setButtonText(this.testingConnection ? 'Testing…' : 'Test connection')
-          .setDisabled(this.testingConnection || this.host.getPluginSettings().secretName.trim() === '')
-          .onClick(async () => {
-            this.testingConnection = true;
-            this.connectionMessage = 'Checking…';
-            this.display();
-            try {
-              const connection = await this.host.testConnection();
-              this.connectionMessage = `Connected to ${connection.campaignName}`;
-            } catch (error) {
-              this.connectionMessage = error instanceof Error
-                ? error.message
-                : 'Could not connect to Recap Raven.';
-            } finally {
-              this.testingConnection = false;
-              this.display();
-            }
-          });
-      });
+      .setDesc(this.connectionMessage);
+    this.addConnectionButton(connectionSetting, () => this.renderLegacySettings());
 
     new Setting(containerEl)
       .setName('Import folder')
@@ -68,9 +113,7 @@ export class RecapRavenSettingTab extends PluginSettingTab {
           .setPlaceholder('Recap Raven')
           .setValue(this.host.getPluginSettings().importFolder)
           .onChange(async (value) => {
-            await this.host.updateSettings({
-              importFolder: normalizePath(value.trim() || 'Recap Raven'),
-            });
+            await this.host.updateSettings({ importFolder: this.normalizeImportFolder(value) });
           });
       });
 
@@ -82,11 +125,7 @@ export class RecapRavenSettingTab extends PluginSettingTab {
           .setPlaceholder('recap-raven, session-recap')
           .setValue(this.host.getPluginSettings().tags.join(', '))
           .onChange(async (value) => {
-            const tags = value
-              .split(',')
-              .map((tag) => tag.trim().replace(/^#+/, ''))
-              .filter((tag) => tag !== '');
-            await this.host.updateSettings({ tags });
+            await this.host.updateSettings({ tags: this.parseTags(value) });
           });
       });
 
@@ -100,6 +139,58 @@ export class RecapRavenSettingTab extends PluginSettingTab {
             await this.host.updateSettings({ createCampaignIndex: value });
           });
       });
+  }
+
+  private refreshDeclarativeSettings(): void {
+    const declarativeTab = this as unknown as { update: () => void };
+    declarativeTab.update();
+  }
+
+  private addSecretControl(setting: Setting, refresh: () => void): void {
+    setting.addComponent((element) => {
+      return new SecretComponent(this.app, element)
+        .setValue(this.host.getPluginSettings().secretName)
+        .onChange(async (value) => {
+          this.connectionMessage = 'Not checked';
+          await this.host.updateSettings({ secretName: value });
+          refresh();
+        });
+    });
+  }
+
+  private addConnectionButton(setting: Setting, refresh: () => void): void {
+    setting.addButton((button) => {
+      button
+        .setButtonText(this.testingConnection ? 'Testing…' : 'Test connection')
+        .setDisabled(this.testingConnection || this.host.getPluginSettings().secretName.trim() === '')
+        .onClick(async () => {
+          this.testingConnection = true;
+          this.connectionMessage = 'Checking…';
+          refresh();
+          try {
+            const connection = await this.host.testConnection();
+            this.connectionMessage = `Connected to ${connection.campaignName}`;
+          } catch (error) {
+            this.connectionMessage = error instanceof Error
+              ? error.message
+              : 'Could not connect to Recap Raven.';
+          } finally {
+            this.testingConnection = false;
+            refresh();
+          }
+        });
+    });
+  }
+
+  private normalizeImportFolder(value: string): string {
+    return normalizePath(value.trim() || 'Recap Raven');
+  }
+
+  private parseTags(value: string): string[] {
+    return value
+      .split(',')
+      .map((tag) => tag.trim().replace(/^#+/, ''))
+      .filter((tag) => tag !== '');
   }
 
   private apiKeyDescription(): DocumentFragment {

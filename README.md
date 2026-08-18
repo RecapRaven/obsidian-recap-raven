@@ -12,7 +12,7 @@ The integration is deliberately small. It downloads completed player recaps from
 
 - Import one, several, or all new player-safe session recaps.
 - Preview exact destination paths before anything is written.
-- Detect previous imports by stable Recap Raven session ID, even after a note is moved or renamed.
+- Detect previous imports by stable Recap Raven session ID, including notes moved or renamed while the plugin is enabled.
 - Protect path collisions with deterministic alternate filenames.
 - Add campaign, session, date, source, and content-hash properties.
 - Optionally create a campaign index with a live Obsidian query, without changing an existing index.
@@ -60,7 +60,7 @@ Recap Raven/<Campaign name>/Sessions/YYYY-MM-DD - Session <number> - <Title>.md
 
 The recorded-date prefix keeps notes in chronological filename order. When a recorded date is unavailable, the filename begins with the session number instead.
 
-If a destination is already occupied by an unrelated note, the importer uses a stable short session-ID suffix. If the session ID is already present anywhere in the vault, the recap is skipped. Files are never overwritten, updated, renamed, moved, or deleted.
+If a destination is already occupied by an unrelated note, the importer uses a stable short session-ID suffix. If the session ID is in the plugin's private import index, the recap is skipped. Files are never overwritten, updated, renamed, moved, or deleted.
 
 ## Imported properties
 
@@ -101,7 +101,7 @@ Opening a recap uses `https://recapraven.com`. The URL is reconstructed from the
 
 ## Local data and API-key storage
 
-Imported recaps and non-secret preferences are stored in the current vault. Non-secret settings are written to `.obsidian/plugins/recap-raven/data.json`. The API-key value is stored through Obsidian SecretStorage; `data.json` retains only the selected secret's name.
+Imported recaps and non-secret preferences are stored in the current vault. Non-secret settings and a private duplicate-detection index containing only imported session IDs and their local paths are written to `.obsidian/plugins/recap-raven/data.json`. The API-key value is stored through Obsidian SecretStorage; `data.json` retains only the selected secret's name.
 
 Obsidian does not isolate SecretStorage entries from other installed community plugins. Another plugin running in the same Obsidian instance may be able to request a secret by name, so install only plugins you trust. SecretStorage is local to a vault/device and is not a substitute for revoking a key that may have been exposed.
 
@@ -116,13 +116,15 @@ Removing or revoking a credential does not delete Markdown files already importe
 ## Privacy and permissions
 
 - No plugin telemetry, analytics, advertising, tracking libraries, or promotional note footers.
-- No background network requests, startup synchronization, timers, or vault watchers.
+- No background network requests, startup synchronization, timers, or full-vault scans. Local Obsidian file events keep the private import index current when an indexed note is renamed, deleted, or has its session-ID property changed.
 - No access to files outside the current vault.
 - No transcript, GM-note, campaign-memory, lore, entity, MCP, or write API access.
 - No file overwrite, update, rename, move, or deletion behavior.
 - No third-party service receives vault content.
 
-The first release is desktop-only while mobile behavior is tested. The implementation uses Obsidian's request and Vault APIs so mobile support can be evaluated later without changing the security model.
+The plugin is desktop-only while mobile behavior is tested. The implementation uses Obsidian's request and Vault APIs so mobile support can be evaluated later without changing the security model.
+
+When upgrading from 1.2.0 or earlier, the plugin discovers prior imports only inside the selected campaign's managed `Sessions` folder. A prior import moved elsewhere while the plugin was disabled cannot be discovered without scanning unrelated vault files; importing that session again may therefore create another note. The plugin intentionally accepts this narrow migration limitation to avoid vault-wide enumeration.
 
 ## Installation for development
 
@@ -130,7 +132,7 @@ The first release is desktop-only while mobile behavior is tested. The implement
 make check
 ```
 
-The Makefile runs installation, linting, tests, coverage, type-checking, and the production build
+The Makefile runs installation, ESLint and Obsidian Community CSS linting, tests, coverage, type-checking, and the production build
 inside the pinned Node container; no host Node installation is required.
 
 For manual testing, copy `main.js`, `manifest.json`, and `styles.css` into a folder named `recap-raven` under a dedicated test vault's plugins directory. Do not develop or test import behavior in your primary vault.

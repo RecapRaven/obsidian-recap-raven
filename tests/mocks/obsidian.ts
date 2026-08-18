@@ -20,13 +20,15 @@ export function resetObsidianMock(): void {
 }
 
 export class TFolder {
-  constructor(public readonly path: string) {}
+  public readonly children: Array<TFile | TFolder> = [];
+
+  constructor(public path: string) {}
 }
 
 export class TFile {
   public readonly basename: string;
 
-  constructor(public readonly path: string, public readonly content = '') {
+  constructor(public path: string, public readonly content = '') {
     const filename = path.split('/').at(-1) ?? path;
     this.basename = filename.replace(/\.md$/iu, '');
   }
@@ -75,6 +77,8 @@ export class Plugin {
   addSettingTab(tab: PluginSettingTab): void {
     this.settingTabs.push(tab);
   }
+
+  registerEvent(_eventRef: unknown): void {}
 }
 
 export class PluginSettingTab {
@@ -259,14 +263,15 @@ export class ToggleComponent {
 export interface MockApp {
   secretStorage: { getSecret: (name: string) => string | null };
   vault: {
-    getMarkdownFiles: () => TFile[];
     getAbstractFileByPath: (path: string) => TFile | TFolder | null;
     read: (file: TFile) => Promise<string>;
     create: (path: string, content: string) => Promise<TFile>;
     createFolder: (path: string) => Promise<TFolder>;
+    on: (name: 'rename' | 'delete', callback: (...args: never[]) => unknown) => unknown;
   };
   metadataCache: {
     getFileCache: (file: TFile) => { frontmatter?: Record<string, unknown> } | null;
+    on: (name: 'changed', callback: (...args: never[]) => unknown) => unknown;
   };
   workspace: {
     getActiveViewOfType: (type: typeof MarkdownView) => MarkdownView | null;

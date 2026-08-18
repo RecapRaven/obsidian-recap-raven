@@ -41,14 +41,6 @@ export default defineConfig(
     },
   },
   {
-    files: ['src/settings/settings-tab.ts', 'tests/settings/settings-tab.test.ts'],
-    rules: {
-      // Keep the imperative settings API while minAppVersion supports Obsidian 1.11.4.
-      '@typescript-eslint/no-deprecated': 'off',
-      'obsidianmd/settings-tab/prefer-setting-definitions': 'off',
-    },
-  },
-  {
     files: ['tests/mocks/obsidian.ts', 'tests/setup.ts'],
     rules: {
       // The test harness models Obsidian's DOM extensions in a plain browser DOM.
