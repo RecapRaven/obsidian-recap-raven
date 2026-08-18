@@ -1,0 +1,46 @@
+name: Owner-maintained pull requests
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - ready_for_review
+
+permissions:
+  contents: read
+
+jobs:
+  close-external-pull-request:
+    if: github.actor != 'rknaggs' && github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Explain the owner-maintained policy and close the pull request
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        with:
+          script: |
+            const message = [
+              'Thank you for taking the time to propose a change.',
+              '',
+              'This repository is owner-maintained so that changes remain aligned with the reviewed release and Obsidian submission process. External code pull requests are therefore not accepted.',
+              '',
+              'Please open an issue describing the problem or proposed improvement. That keeps feedback available for consideration without running contributed code in the repository workflows.',
+              '',
+              'This pull request has been closed automatically.',
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              ...context.repo,
+              issue_number: context.issue.number,
+              body: message,
+            });
+            await github.rest.pulls.update({
+              ...context.repo,
+              pull_number: context.issue.number,
+              state: 'closed',
+            });

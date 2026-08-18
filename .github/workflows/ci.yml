@@ -12,6 +12,7 @@ permissions:
 
 jobs:
   check:
+    if: github.event_name != 'pull_request' || github.actor == 'rknaggs' || github.actor == 'dependabot[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -23,7 +24,7 @@ jobs:
       - name: Validate GitHub Actions workflows
         uses: docker://rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 # v1.7.12
         with:
-          args: -color .github/workflows/ci.yml .github/workflows/release.yml .github/workflows/security.yml
+          args: -color .github/workflows/ci.yml .github/workflows/owner-maintained.yml .github/workflows/release.yml .github/workflows/security.yml
 
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
