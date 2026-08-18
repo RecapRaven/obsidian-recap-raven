@@ -44,8 +44,15 @@ describe('owner-maintained pull-request workflow', () => {
     const allowedPullRequest =
       "github.event.pull_request.user.login == 'rknaggs' || github.event.pull_request.user.login == 'dependabot[bot]'";
 
-    expect(ci).toContain(`if: github.event_name != 'pull_request' || ${allowedPullRequest}`);
+    expect(ci).toContain('pull_request_target:');
+    expect(ci).not.toMatch(/^\s+pull_request:\s*$/mu);
+    expect(ci).toContain(`if: github.event_name != 'pull_request_target' || ${allowedPullRequest}`);
+    expect(ci).toContain("ref: ${{ github.event_name == 'pull_request_target'");
     expect(ci).toContain('.github/workflows/owner-maintained.yml');
+
+    expect(security).toContain('pull_request_target:');
+    expect(security).not.toMatch(/^\s+pull_request:\s*$/mu);
     expect(security.split(allowedPullRequest)).toHaveLength(5);
+    expect(security.split('github.event.pull_request.head.sha')).toHaveLength(5);
   });
 });
