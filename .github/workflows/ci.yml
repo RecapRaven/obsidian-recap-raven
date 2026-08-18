@@ -11,8 +11,42 @@ permissions:
   contents: read
 
 jobs:
+  authorize_pr:
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      allowed: ${{ steps.permission.outputs.allowed }}
+    steps:
+      - name: Verify the pull request author
+        id: permission
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        with:
+          script: |
+            const author = context.payload.pull_request.user;
+            const isDependabot = author.login === 'dependabot[bot]' && author.type === 'Bot';
+            let isAdministrator = false;
+
+            if (!isDependabot) {
+              try {
+                const response = await github.rest.repos.getCollaboratorPermissionLevel({
+                  ...context.repo,
+                  username: author.login,
+                });
+                isAdministrator = response.data.permission === 'admin';
+              } catch (error) {
+                if (error.status !== 404) throw error;
+              }
+            }
+
+            core.setOutput('allowed', String(isDependabot || isAdministrator));
+
   check:
-    if: github.event_name != 'pull_request_target' || github.event.pull_request.user.login == 'rknaggs' || github.event.pull_request.user.login == 'dependabot[bot]'
+    if: ${{ always() && (github.event_name != 'pull_request_target' || needs.authorize_pr.outputs.allowed == 'true') }}
+    needs:
+      - authorize_pr
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -53,8 +87,9 @@ jobs:
             styles.css
 
   record-pr-check:
-    if: ${{ always() && github.event_name == 'pull_request_target' && (github.event.pull_request.user.login == 'rknaggs' || github.event.pull_request.user.login == 'dependabot[bot]') }}
+    if: ${{ always() && github.event_name == 'pull_request_target' && needs.authorize_pr.outputs.allowed == 'true' }}
     needs:
+      - authorize_pr
       - check
     runs-on: ubuntu-latest
     timeout-minutes: 5
