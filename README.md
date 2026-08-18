@@ -149,7 +149,7 @@ Maintainers prepare a version with `make version VERSION=1.0.1`. This updates `p
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the Docker-first development workflow and pull-request expectations.
+This is an owner-maintained repository. Please open an issue for bugs and improvement proposals; external code pull requests are closed without running contributed code. See [CONTRIBUTING.md](CONTRIBUTING.md) for the rationale and development standards.
 
 ## Support and security
 

@@ -20,10 +20,8 @@ Keep changes small and include tests for happy paths, failures, hostile input, a
 
 ## Pull requests
 
-- Explain the user-visible behavior and security or privacy impact.
-- Add or update tests and documentation.
-- Keep networking manual and restricted to the documented Recap Raven origins.
-- Preserve create-only vault writes and campaign-bound, player-safe access.
-- Ensure `make check` and the public CI/security workflows pass.
+This is an owner-maintained repository. Keeping implementation changes within the Recap Raven maintainership helps us preserve the reviewed release provenance, security boundaries, and Obsidian submission requirements. External code pull requests are closed automatically without running contributed code.
+
+Please use an issue to report a bug or propose an improvement. Clear reproduction steps, expected behavior, and synthetic examples are welcome. If the change is accepted, a maintainer will implement it through the repository's tested pull-request process and credit the originating issue where appropriate.
 
 By contributing, you agree that your contribution is licensed under the repository's [MIT licence](LICENSE).
