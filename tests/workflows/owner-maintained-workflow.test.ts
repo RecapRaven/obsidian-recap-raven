@@ -20,7 +20,7 @@ describe('owner-maintained pull-request workflow', () => {
     const workflow = await readFile(workflowPath, 'utf8');
 
     expect(workflow).toContain(
-      "if: github.actor != 'rknaggs' && github.actor != 'dependabot[bot]'",
+      "if: github.event.pull_request.user.login != 'rknaggs' && github.event.pull_request.user.login != 'dependabot[bot]'",
     );
     expect(workflow).toContain('issues: write');
     expect(workflow).toContain('pull-requests: write');
@@ -41,7 +41,8 @@ describe('owner-maintained pull-request workflow', () => {
   it('prevents external pull-request code from entering CI or security jobs', async () => {
     const ci = await readFile(ciPath, 'utf8');
     const security = await readFile(securityPath, 'utf8');
-    const allowedPullRequest = "github.actor == 'rknaggs' || github.actor == 'dependabot[bot]'";
+    const allowedPullRequest =
+      "github.event.pull_request.user.login == 'rknaggs' || github.event.pull_request.user.login == 'dependabot[bot]'";
 
     expect(ci).toContain(`if: github.event_name != 'pull_request' || ${allowedPullRequest}`);
     expect(ci).toContain('.github/workflows/owner-maintained.yml');
