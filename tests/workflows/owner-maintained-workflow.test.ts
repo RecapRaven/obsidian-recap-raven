@@ -16,12 +16,13 @@ describe('owner-maintained pull-request workflow', () => {
     expect(workflow).toContain('permissions:\n  contents: read');
   });
 
-  it('allows only the owner and Dependabot pull requests to remain open', async () => {
+  it('allows only repository administrators and Dependabot pull requests to remain open', async () => {
     const workflow = await readFile(workflowPath, 'utf8');
 
-    expect(workflow).toContain(
-      "if: github.event.pull_request.user.login != 'rknaggs' && github.event.pull_request.user.login != 'dependabot[bot]'",
-    );
+    expect(workflow).toContain('github.rest.repos.getCollaboratorPermissionLevel');
+    expect(workflow).toContain("response.data.permission === 'admin'");
+    expect(workflow).toContain("author.login === 'dependabot[bot]' && author.type === 'Bot'");
+    expect(workflow).toContain("if: needs.authorize_pr.outputs.allowed != 'true'");
     expect(workflow).toContain('issues: write');
     expect(workflow).toContain('pull-requests: write');
     expect(workflow).toContain(
@@ -41,12 +42,11 @@ describe('owner-maintained pull-request workflow', () => {
   it('prevents external pull-request code from entering CI or security jobs', async () => {
     const ci = await readFile(ciPath, 'utf8');
     const security = await readFile(securityPath, 'utf8');
-    const allowedPullRequest =
-      "github.event.pull_request.user.login == 'rknaggs' || github.event.pull_request.user.login == 'dependabot[bot]'";
 
     expect(ci).toContain('pull_request_target:');
     expect(ci).not.toMatch(/^\s+pull_request:\s*$/mu);
-    expect(ci).toContain(`if: github.event_name != 'pull_request_target' || ${allowedPullRequest}`);
+    expect(ci).toContain('github.rest.repos.getCollaboratorPermissionLevel');
+    expect(ci).toContain("needs.authorize_pr.outputs.allowed == 'true'");
     expect(ci).toContain("ref: ${{ github.event_name == 'pull_request_target'");
     expect(ci).toContain('.github/workflows/owner-maintained.yml');
     expect(ci).toContain('statuses: write');
@@ -55,7 +55,8 @@ describe('owner-maintained pull-request workflow', () => {
 
     expect(security).toContain('pull_request_target:');
     expect(security).not.toMatch(/^\s+pull_request:\s*$/mu);
-    expect(security.split(allowedPullRequest)).toHaveLength(6);
+    expect(security).toContain('github.rest.repos.getCollaboratorPermissionLevel');
+    expect(security.split("needs.authorize_pr.outputs.allowed == 'true'")).toHaveLength(6);
     expect(security.split('github.event.pull_request.head.sha')).toHaveLength(5);
     expect(security).toContain('statuses: write');
     expect(security).toContain('sha: context.payload.pull_request.head.sha');
@@ -77,6 +78,18 @@ describe('owner-maintained pull-request workflow', () => {
       expect(recorder).toContain(
         'uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0',
       );
+    }
+  });
+
+  it('does not hard-code a personal GitHub identity', async () => {
+    const files = await Promise.all([
+      readFile(workflowPath, 'utf8'),
+      readFile(ciPath, 'utf8'),
+      readFile(securityPath, 'utf8'),
+    ]);
+
+    for (const file of files) {
+      expect(file).not.toMatch(/user\.login\s*[!=]=\s*'[a-z0-9-]+'/iu);
     }
   });
 });
