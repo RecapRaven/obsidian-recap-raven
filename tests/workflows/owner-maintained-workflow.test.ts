@@ -49,10 +49,34 @@ describe('owner-maintained pull-request workflow', () => {
     expect(ci).toContain(`if: github.event_name != 'pull_request_target' || ${allowedPullRequest}`);
     expect(ci).toContain("ref: ${{ github.event_name == 'pull_request_target'");
     expect(ci).toContain('.github/workflows/owner-maintained.yml');
+    expect(ci).toContain('statuses: write');
+    expect(ci).toContain('sha: context.payload.pull_request.head.sha');
+    expect(ci).toContain("context: 'check'");
 
     expect(security).toContain('pull_request_target:');
     expect(security).not.toMatch(/^\s+pull_request:\s*$/mu);
-    expect(security.split(allowedPullRequest)).toHaveLength(5);
+    expect(security.split(allowedPullRequest)).toHaveLength(6);
     expect(security.split('github.event.pull_request.head.sha')).toHaveLength(5);
+    expect(security).toContain('statuses: write');
+    expect(security).toContain('sha: context.payload.pull_request.head.sha');
+    expect(security).toContain("'dependency-review':");
+    expect(security).toContain("'dependency-audit':");
+    expect(security).toContain("codeql:");
+    expect(security).toContain("gitleaks:");
+  });
+
+  it('keeps status-writing jobs isolated from pull-request code', async () => {
+    const ci = await readFile(ciPath, 'utf8');
+    const security = await readFile(securityPath, 'utf8');
+    const ciRecorder = ci.slice(ci.indexOf('  record-pr-check:'));
+    const securityRecorder = security.slice(security.indexOf('  record-pr-checks:'));
+
+    for (const recorder of [ciRecorder, securityRecorder]) {
+      expect(recorder).not.toContain('actions/checkout');
+      expect(recorder).not.toMatch(/^\s+run:/mu);
+      expect(recorder).toContain(
+        'uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0',
+      );
+    }
   });
 });
