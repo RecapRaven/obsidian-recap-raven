@@ -64,6 +64,8 @@ If a destination is already occupied by an unrelated note, the importer uses a s
 
 To include normalised session transcripts, create an export key with transcript access and enable **Include session transcripts** in the plugin settings. This is off by default. Transcripts may contain private GM material; enable it only for a vault intended to hold that material. Each transcript is created at `<recap filename>/Transcript.md`, with a link back to the recap. New recaps also link to their transcript. Existing recaps can receive a missing transcript without changing the recap; existing transcript files are preserved. If a transcript write fails after its recap is created, repeat the import to retry the missing transcript. For an existing campaign index, run **Create campaign index** to create a recap-only index alongside it; existing files are preserved.
 
+Existing export keys continue to work for recaps. To enable transcripts for an active campaign with an existing key, revoke that key, create a replacement with transcript access, and select the replacement secret in Obsidian before enabling **Include session transcripts**. Only one export key can be active per campaign. Rotating a key preserves its permissions and does not enable transcript access.
+
 ## Imported properties
 
 Each session note includes YAML properties similar to:
