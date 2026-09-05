@@ -4,13 +4,14 @@
 [![Security](https://github.com/RecapRaven/obsidian-recap-raven/actions/workflows/security.yml/badge.svg)](https://github.com/RecapRaven/obsidian-recap-raven/actions/workflows/security.yml)
 [![MIT licence](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
 
-Import player-safe [Recap Raven](https://recapraven.com) session recaps into your vault as structured, local Markdown. Imports are manual and create-only: existing notes are never overwritten or deleted.
+Import player-safe [Recap Raven](https://recapraven.com) session recaps into your vault as structured, local Markdown, with optional normalised transcripts in linked notes beneath each recap. Imports are manual and create-only: existing notes are never overwritten or deleted.
 
-The integration is deliberately small. It downloads completed player recaps from the one campaign bound to your export key, adds useful properties, and keeps each recap as an ordinary Markdown file you control.
+The plugin uses a campaign-bound Obsidian export key and never uploads vault content. Transcript importing is off by default and requires explicit permission in both the key and plugin settings. Transcripts may contain private GM material; use a vault intended to hold that material.
 
 ## Features
 
 - Import one, several, or all new player-safe session recaps.
+- Optionally import normalised transcripts beneath their recaps, including missing transcripts for previously imported recaps.
 - Preview exact destination paths before anything is written.
 - Detect previous imports by stable Recap Raven session ID, including notes moved or renamed while the plugin is enabled.
 - Protect path collisions with deterministic alternate filenames.
