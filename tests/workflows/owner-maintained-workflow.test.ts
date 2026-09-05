@@ -26,7 +26,7 @@ describe('owner-maintained pull-request workflow', () => {
     expect(workflow).toContain('issues: write');
     expect(workflow).toContain('pull-requests: write');
     expect(workflow).toContain(
-      'uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0',
+      'uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0',
     );
     expect(workflow).toContain("state: 'closed'");
   });
@@ -76,7 +76,7 @@ describe('owner-maintained pull-request workflow', () => {
       expect(recorder).not.toContain('actions/checkout');
       expect(recorder).not.toMatch(/^\s+run:/mu);
       expect(recorder).toContain(
-        'uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0',
+        'uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0',
       );
     }
   });

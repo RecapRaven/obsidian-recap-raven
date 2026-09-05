@@ -40,7 +40,7 @@ describe('release workflow privilege separation', () => {
     expect(attest).not.toContain('contents: write');
     expect(attest).not.toContain('run:');
     expect(attest).toContain(
-      'uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1',
+      'uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2',
     );
     expect(attest).toContain('subject-path: |\n            main.js\n            manifest.json\n            styles.css');
     expect(attest).not.toContain('.github/release-notes');

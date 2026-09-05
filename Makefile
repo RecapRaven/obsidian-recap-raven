@@ -1,4 +1,4 @@
-NODE_IMAGE ?= node:22.18.0-bookworm-slim@sha256:752ea8a2f758c34002a0461bd9f1cee4f9a3c36d48494586f60ffce1fc708e0e
+NODE_IMAGE ?= node:22.23.2-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5
 DOCKER_RUN = docker run --rm --user $$(id -u):$$(id -g) -e npm_config_cache=/tmp/npm-cache -v "$$(pwd):/app" -w /app $(NODE_IMAGE)
 
 .PHONY: install dev typecheck lint test build check version
