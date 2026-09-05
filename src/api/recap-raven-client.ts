@@ -4,8 +4,9 @@ import {
   parseConnectionResponse,
   parseSessionPage,
   parseSessionResponse,
+  parseTranscriptResponse,
 } from './contract';
-import type { Campaign, Session, SessionPage, SessionSummary } from './contract';
+import type { Campaign, Session, SessionPage, SessionSummary, SessionTranscript } from './contract';
 import { RecapRavenError } from './recap-raven-error';
 
 export const API_ORIGIN = 'https://api.recapraven.com';
@@ -100,7 +101,20 @@ export class RecapRavenClient {
     return session;
   }
 
-  private async get(path: string): Promise<unknown> {
+  public async getTranscript(id: string, expectedCampaignId: string): Promise<SessionTranscript> {
+    this.validateUuid(id, 'session id');
+    this.validateUuid(expectedCampaignId, 'campaign id');
+    const transcript = this.parse(
+      parseTranscriptResponse,
+      await this.get(`/sessions/${encodeURIComponent(id)}/transcript`, 'transcript'),
+    );
+    if (transcript.session_id !== id || transcript.campaign_id !== expectedCampaignId) {
+      throw this.unexpected('The transcript response did not match the requested session and campaign.');
+    }
+    return transcript;
+  }
+
+  private async get(path: string, resource: 'recap' | 'transcript' = 'recap'): Promise<unknown> {
     const key = this.key();
     let response: HttpResponse;
     try {
@@ -121,7 +135,7 @@ export class RecapRavenClient {
       );
     }
     if (response.status < 200 || response.status >= 300) {
-      throw errorForStatus(response.status);
+      throw errorForStatus(response.status, resource);
     }
     return response.body;
   }
@@ -164,7 +178,7 @@ export class RecapRavenClient {
   }
 }
 
-function errorForStatus(status: number): RecapRavenError {
+function errorForStatus(status: number, resource: 'recap' | 'transcript'): RecapRavenError {
   switch (status) {
     case 400:
     case 422:
@@ -172,9 +186,13 @@ function errorForStatus(status: number): RecapRavenError {
     case 401:
       return new RecapRavenError('unauthorized', 'The export key is invalid, expired, or revoked.', status);
     case 403:
-      return new RecapRavenError('forbidden', 'This export key cannot access the requested campaign.', status);
+      return new RecapRavenError('forbidden', resource === 'transcript'
+        ? 'Transcript access was denied. Check the export key’s transcript permission.'
+        : 'This export key cannot access the requested campaign.', status);
     case 404:
-      return new RecapRavenError('not-found', 'That recap is no longer available.', status);
+      return new RecapRavenError('not-found', resource === 'transcript'
+        ? 'The normalised transcript is not available for this session.'
+        : 'That recap is no longer available.', status);
     case 429:
       return new RecapRavenError(
         'rate-limited',

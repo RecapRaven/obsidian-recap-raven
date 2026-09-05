@@ -8,6 +8,7 @@ export interface PlannedImportItem {
   destinationPath: string;
   state: PlannedImportState;
   existingPath?: string;
+  transcriptPath?: string;
 }
 
 export interface ImportPlan {

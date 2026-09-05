@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { Campaign, Session, SessionSummary } from "../../src/api/contract";
+import type { Campaign, Session, SessionSummary, SessionTranscript } from "../../src/api/contract";
 import {
   type CreateOnlyVault,
   SessionImportService,
@@ -40,6 +40,18 @@ function summary(id: string): SessionSummary {
   return { id, campaign_id: campaign.id } as SessionSummary;
 }
 
+async function transcript(id: string): Promise<SessionTranscript> {
+  const text = '[00:01] Guide: The silver door opens.';
+  return {
+    session_id: id,
+    campaign_id: campaign.id,
+    artifact_created_at: '2026-09-05T12:00:00Z',
+    content_type: 'text/plain',
+    text,
+    content_sha256: await sha256Hex(new TextEncoder().encode(text)),
+  };
+}
+
 function vault(existing: readonly string[] = []) {
   const created = new Map(existing.map((path) => [path, "existing"]));
   return {
@@ -57,6 +69,110 @@ function vault(existing: readonly string[] = []) {
 }
 
 describe("create-only session import", () => {
+  it('imports a linked transcript beneath its recap only when enabled', async () => {
+    const store = vault();
+    const reader = { getSession: detail, getTranscript: vi.fn(transcript) };
+    const identities = buildSessionIdentityIndex();
+    const service = new SessionImportService(reader, store, identities);
+    const result = await service.importSessions(campaign, [summary(ids[0])], {
+      importRoot: 'Recap Raven', tags: [], includeTranscripts: true,
+    });
+    const path = result.items[0]?.path ?? '';
+    const child = `${path.slice(0, -3)}/Transcript.md`;
+    expect(result.imported).toBe(1);
+    expect(store.created.get(path)).toContain('[Session transcript](./Session%201%20-%20Title%20123e/Transcript.md)');
+    expect(store.created.get(child)).toContain('[Back to recap](../Session%201%20-%20Title%20123e.md)');
+    expect(identities.paths(ids[0])).toEqual([path]);
+    const retry = await service.importSessions(campaign, [summary(ids[0])], {
+      importRoot: 'Recap Raven', tags: [], includeTranscripts: true,
+    });
+    expect(retry.skipped).toBe(1);
+    expect(reader.getTranscript).toHaveBeenCalledOnce();
+    expect(store.createExclusive).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not download transcripts with the default recap-only settings', async () => {
+    const reader = { getSession: detail, getTranscript: vi.fn(transcript) };
+    const service = new SessionImportService(reader, vault(), buildSessionIdentityIndex());
+    await service.importSessions(campaign, [summary(ids[0])], { importRoot: 'Recap Raven', tags: [] });
+    expect(reader.getTranscript).not.toHaveBeenCalled();
+  });
+
+  it('backfills an existing recap at its indexed path without changing user content', async () => {
+    const path = 'Moved recaps/Edited title.md';
+    const store = vault([path]);
+    const reader = { getSession: vi.fn(detail), getTranscript: transcript };
+    const identities = buildSessionIdentityIndex([], [{ sessionId: ids[0], path }]);
+    const service = new SessionImportService(reader, store, identities);
+    const result = await service.importSessions(campaign, [summary(ids[0])], {
+      importRoot: 'Recap Raven', tags: [], includeTranscripts: true,
+    });
+    expect(result.items[0]).toMatchObject({ status: 'imported', path: 'Moved recaps/Edited title/Transcript.md' });
+    expect(reader.getSession).not.toHaveBeenCalled();
+    expect(store.created.get(path)).toBe('existing');
+    expect(store.created.size).toBe(2);
+  });
+
+  it('retries a transcript write failure without duplicating or overwriting the saved recap', async () => {
+    const store = vault();
+    const create = store.createExclusive.getMockImplementation();
+    store.createExclusive.mockImplementationOnce(create!).mockRejectedValueOnce(new Error('disk full'));
+    const identities = buildSessionIdentityIndex();
+    const service = new SessionImportService({ getSession: detail, getTranscript: transcript }, store, identities);
+    const options = { importRoot: 'Recap Raven', tags: [], includeTranscripts: true };
+    const failed = await service.importSessions(campaign, [summary(ids[0])], options);
+    expect(failed.failed).toBe(1);
+    expect(failed.items[0]?.reason).toContain('The recap was kept');
+    expect(identities.has(ids[0])).toBe(true);
+    expect(store.created.size).toBe(1);
+    const retried = await service.importSessions(campaign, [summary(ids[0])], options);
+    expect(retried.imported).toBe(1);
+    expect(store.created.size).toBe(2);
+    expect(store.createExclusive).toHaveBeenCalledTimes(3);
+  });
+
+  it('validates a transcript before making any new note or folder', async () => {
+    const store = vault();
+    const reader = { getSession: detail, getTranscript: async (id: string) => ({ ...await transcript(id), text: 'tampered' }) };
+    const service = new SessionImportService(reader, store, buildSessionIdentityIndex());
+    const result = await service.importSessions(campaign, [summary(ids[0])], {
+      importRoot: 'Recap Raven', tags: [], includeTranscripts: true,
+    });
+    expect(result.failed).toBe(1);
+    expect(store.ensureFolder).not.toHaveBeenCalled();
+    expect(store.createExclusive).not.toHaveBeenCalled();
+  });
+
+  it('previews both new and backfilled transcripts without writes', async () => {
+    const existing = 'Recaps/Existing.md';
+    const store = vault([existing]);
+    const identities = buildSessionIdentityIndex([], [{ sessionId: ids[1], path: existing }]);
+    const service = new SessionImportService({ getSession: detail, getTranscript: transcript }, store, identities);
+    const result = await service.importSessions(campaign, [summary(ids[0]), summary(ids[1])], {
+      importRoot: 'Recap Raven', tags: [], includeTranscripts: true, dryRun: true,
+    });
+    expect(result.wouldImport).toBe(2);
+    expect(store.ensureFolder).not.toHaveBeenCalled();
+    expect(store.createExclusive).not.toHaveBeenCalled();
+  });
+
+  it('preserves unrelated transcript destinations and rejects an exclusive-create race', async () => {
+    const path = 'Recap Raven/Rime/Sessions/Session 1 - Title 123e/Transcript.md';
+    const occupied = vault([path]);
+    const service = new SessionImportService({ getSession: detail, getTranscript: transcript }, occupied, buildSessionIdentityIndex());
+    const options = { importRoot: 'Recap Raven', tags: [], includeTranscripts: true };
+    expect((await service.importSessions(campaign, [summary(ids[0])], options)).failed).toBe(1);
+    expect(occupied.created.get(path)).toBe('existing');
+    expect(occupied.createExclusive).not.toHaveBeenCalled();
+
+    const store = vault();
+    const create = store.createExclusive.getMockImplementation();
+    store.createExclusive.mockImplementationOnce(create!).mockResolvedValueOnce(false);
+    const raced = new SessionImportService({ getSession: detail, getTranscript: transcript }, store, buildSessionIdentityIndex());
+    expect((await raced.importSessions(campaign, [summary(ids[0])], options)).failed).toBe(1);
+    expect(store.createExclusive).toHaveBeenCalledTimes(2);
+  });
+
   it("skips a known UUID before downloading detail", async () => {
     const reader = { getSession: vi.fn(detail) };
     const store = vault();

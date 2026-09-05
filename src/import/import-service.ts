@@ -1,4 +1,4 @@
-import type { Campaign, Session, SessionSummary } from "../api/contract";
+import type { Campaign, Session, SessionSummary, SessionTranscript } from "../api/contract";
 import { buildSessionNote } from "../utils/frontmatter";
 import {
   collisionSessionPath,
@@ -7,6 +7,7 @@ import {
 } from "../utils/paths";
 import { validateSessionContent } from "../utils/markdown";
 import type { SessionIdentityIndex } from "./session-identity";
+import { buildTranscriptNote, noteLink, transcriptNotePath, validateTranscript } from "../utils/transcript";
 
 export type ImportItemStatus = "imported" | "would-import" | "skipped" | "failed";
 
@@ -31,6 +32,7 @@ export interface ImportBatchResult {
 
 export interface RecapSessionReader {
   getSession(sessionId: string): Promise<Session>;
+  getTranscript?(sessionId: string): Promise<SessionTranscript>;
 }
 
 export interface CreateOnlyVault {
@@ -55,6 +57,7 @@ export interface ImportOptions {
   readonly importRoot: string;
   readonly tags: readonly string[];
   readonly dryRun?: boolean;
+  readonly includeTranscripts?: boolean;
   readonly classifyError?: (error: unknown) => ImportErrorClassification;
   readonly onProgress?: (progress: ImportProgressUpdate) => void;
 }
@@ -98,7 +101,7 @@ export class SessionImportService {
         total: summaries.length,
         summary,
       });
-      if (this.identities.has(summary.id)) {
+      if (this.identities.has(summary.id) && options.includeTranscripts !== true) {
         items.push({ sessionId: summary.id, status: "skipped", reason: "Already imported." });
         continue;
       }
@@ -111,7 +114,11 @@ export class SessionImportService {
           message: "This recap could not be imported.",
           fatal: false,
         };
-        items.push({ sessionId: summary.id, status: "failed", reason: safeErrorMessage(classification.message) });
+        const retainedRecap = options.includeTranscripts === true && this.identities.has(summary.id);
+        const message = retainedRecap
+          ? `The recap was kept, but its transcript could not be imported. ${classification.message}`
+          : classification.message;
+        items.push({ sessionId: summary.id, status: "failed", reason: safeErrorMessage(message) });
         if (classification.fatal) {
           stoppedEarly = true;
           break;
@@ -130,6 +137,10 @@ export class SessionImportService {
     if (summary.campaign_id !== campaign.id) {
       throw new Error("The session is outside the credential-bound campaign.");
     }
+    const existingPath = this.identities.paths(summary.id)[0];
+    if (existingPath !== undefined && options.includeTranscripts === true) {
+      return this.importTranscript(campaign, summary.id, existingPath, options);
+    }
     const session = await this.reader.getSession(summary.id);
     await validateSessionContent(session, summary.id, campaign.id);
 
@@ -147,18 +158,62 @@ export class SessionImportService {
     if (await this.vault.exists(path)) {
       return { sessionId: session.id, status: "skipped", path, reason: "A note already uses this path." };
     }
+    const transcript = options.includeTranscripts === true
+      ? await this.loadTranscript(campaign, session.id)
+      : null;
+    const transcriptPath = transcript === null ? null : transcriptNotePath(path);
+    if (transcriptPath !== null && await this.vault.exists(transcriptPath)) {
+      throw new Error("The transcript destination is occupied.");
+    }
     if (options.dryRun === true) {
       return { sessionId: session.id, status: "would-import", path };
     }
 
-    const note = buildSessionNote(session, campaign, options.tags);
+    const filename = path.slice(path.lastIndexOf("/") + 1, -3);
+    const transcriptLink = transcript === null ? "" : `\n\n${noteLink("Session transcript", `./${filename}/Transcript.md`)}\n`;
+    const note = buildSessionNote(session, campaign, options.tags) + transcriptLink;
     await this.vault.ensureFolder(parentFolder(path));
     const created = await this.vault.createExclusive(path, note);
     if (!created) {
       return { sessionId: session.id, status: "skipped", path, reason: "A note was created at this path." };
     }
     this.identities.add(session.id, path);
+    if (transcript !== null && transcriptPath !== null) {
+      await this.writeTranscript(transcript, path, transcriptPath);
+    }
     return { sessionId: session.id, status: "imported", path };
+  }
+
+  private async loadTranscript(campaign: Campaign, sessionId: string): Promise<SessionTranscript> {
+    if (this.reader.getTranscript === undefined) {
+      throw new Error("Transcript access is not available.");
+    }
+    const transcript = await this.reader.getTranscript(sessionId);
+    await validateTranscript(transcript, sessionId, campaign.id);
+    return transcript;
+  }
+
+  private async importTranscript(
+    campaign: Campaign,
+    sessionId: string,
+    recapPath: string,
+    options: ImportOptions,
+  ): Promise<ImportItemResult> {
+    const path = transcriptNotePath(recapPath);
+    if (await this.vault.exists(path)) {
+      return { sessionId, status: "skipped", path, reason: "A transcript note already uses this path." };
+    }
+    const transcript = await this.loadTranscript(campaign, sessionId);
+    if (options.dryRun === true) return { sessionId, status: "would-import", path };
+    await this.writeTranscript(transcript, recapPath, path);
+    return { sessionId, status: "imported", path };
+  }
+
+  private async writeTranscript(transcript: SessionTranscript, recapPath: string, path: string): Promise<void> {
+    await this.vault.ensureFolder(parentFolder(path));
+    if (!await this.vault.createExclusive(path, buildTranscriptNote(transcript, recapPath))) {
+      throw new Error("The transcript destination was occupied during import.");
+    }
   }
 }
 
