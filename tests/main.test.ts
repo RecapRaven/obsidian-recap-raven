@@ -131,7 +131,7 @@ describe('production plugin orchestration', () => {
     expect(index).toBeInstanceOf(TFile);
     if (!(index instanceof TFile)) throw new Error('Campaign index was not created.');
     expect(index.content).toContain(
-      '```query\npath:"Recap Raven/The Glass Archive/Sessions"\n```',
+      '```query\npath:"Recap Raven/The Glass Archive/Sessions" [recap_raven_session_id]\n```',
     );
     expect(document.body.textContent).toContain('1 imported, 0 skipped, 0 failed, 0 not attempted.');
   });
@@ -171,6 +171,29 @@ describe('production plugin orchestration', () => {
       message: 'The export key is invalid, expired, or revoked. Open Obsidian Settings → Recap Raven to select a new key.',
       timeout: 8000,
     });
+  });
+
+  it('creates a filtered index alongside a legacy index without replacing either file', async () => {
+    const harness = await pluginHarness();
+    requestUrl.mockResolvedValue(response(connectionEnvelope()));
+    command(harness, 'create-campaign-index').callback?.();
+    const path = 'Recap Raven/The Glass Archive/Campaign index.md';
+    await waitFor(() => harness.files.has(path));
+    const generated = harness.files.get(path);
+    if (!(generated instanceof TFile)) throw new Error('Campaign index was not created.');
+    const legacy = generated.content.replace(' [recap_raven_session_id]', '');
+    harness.files.set(path, new TFile(path, legacy));
+    command(harness, 'create-campaign-index').callback?.();
+    const alternatePath = 'Recap Raven/The Glass Archive/Campaign index (Recap Raven).md';
+    await waitFor(() => harness.files.has(alternatePath));
+    expect(harness.files.get(path)).toMatchObject({ content: legacy });
+    const alternate = harness.files.get(alternatePath);
+    if (!(alternate instanceof TFile)) throw new Error('Filtered index was not created.');
+    expect(alternate.content).toContain('path:"Recap Raven/The Glass Archive/Sessions" [recap_raven_session_id]');
+    harness.files.set(alternatePath, new TFile(alternatePath, 'Edited alternate'));
+    command(harness, 'create-campaign-index').callback?.();
+    await waitFor(() => notices.some(({ message }) => message.includes('destination is occupied')));
+    expect(harness.files.get(alternatePath)).toMatchObject({ content: 'Edited alternate' });
   });
 
   it('keeps generated indexes idempotent and preserves a user-owned canonical index', async () => {
