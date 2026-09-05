@@ -3,6 +3,12 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_SETTINGS, normalizeSettings } from '../../src/settings/settings';
 
 describe('settings', () => {
+  it('requires an explicit boolean opt-in for transcript importing', () => {
+    for (const includeTranscripts of [undefined, null, false, 'true', 1, {}]) {
+      expect(normalizeSettings({ includeTranscripts }).includeTranscripts).toBe(false);
+    }
+    expect(normalizeSettings({ includeTranscripts: true }).includeTranscripts).toBe(true);
+  });
   it('uses conservative defaults for missing data', () => {
     expect(normalizeSettings(null)).toEqual(DEFAULT_SETTINGS);
   });
@@ -14,6 +20,7 @@ describe('settings', () => {
       importFolder: 'Campaign imports',
       tags: ['#Recap Raven', 'sessions', 'sessions', '<invalid>'],
       createCampaignIndex: false,
+      includeTranscripts: false,
     });
 
     expect(settings).toEqual({
@@ -21,6 +28,7 @@ describe('settings', () => {
       importFolder: 'Campaign imports',
       tags: ['Recap-Raven', 'sessions'],
       createCampaignIndex: false,
+      includeTranscripts: false,
     });
     expect(settings).not.toHaveProperty('apiKey');
   });
@@ -35,6 +43,7 @@ describe('settings', () => {
       importFolder: DEFAULT_SETTINGS.importFolder,
       tags: DEFAULT_SETTINGS.tags,
       createCampaignIndex: true,
+      includeTranscripts: false,
     });
   });
 });

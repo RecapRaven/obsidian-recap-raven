@@ -205,8 +205,9 @@ export class ImportPreviewModal extends Modal {
     this.modalEl.addClass('recap-raven-modal');
     this.setTitle('Preview import');
     const selected = this.plan.items.filter((item) => this.sessionIds.has(item.sessionId));
-    const newCount = selected.filter((item) => item.state !== 'imported').length;
-    const skippedCount = selected.length - newCount;
+    const pending = selected.filter((item) => item.state !== 'imported');
+    const newCount = pending.reduce((count, item) => count + (item.transcriptPath === undefined ? 1 : 2), 0);
+    const skippedCount = selected.length - pending.length;
     this.contentEl.createEl('p', {
       text: `${this.plan.campaignName}: ${newCount} note${newCount === 1 ? '' : 's'} to create, ${skippedCount} to skip. No notes have been changed.`,
     });
@@ -220,6 +221,9 @@ export class ImportPreviewModal extends Modal {
       action.append(item.state === 'imported'
         ? ` ${item.existingPath ?? 'already imported'}`
         : ` ${item.destinationPath}`);
+      if (item.state !== 'imported' && item.transcriptPath !== undefined) {
+        entry.createDiv({ cls: 'recap-raven-plan-action', text: `Create ${item.transcriptPath}` });
+      }
       if (item.state === 'collision') renderCollisionWarning(entry);
     }
     const footer = this.contentEl.createDiv({ cls: 'recap-raven-modal-footer' });

@@ -3,6 +3,7 @@ import type { App, Plugin, SettingDefinitionItem } from 'obsidian';
 import type { RecapRavenSettings } from './settings';
 
 const API_KEYS_URL = 'https://recapraven.com/account/api-keys';
+const TRANSCRIPT_DESCRIPTION = 'Import the normalised transcript as a linked note beneath each recap. Requires an export key with transcript access. Transcripts may contain private GM material.';
 
 export interface SettingsHost {
   getPluginSettings(): RecapRavenSettings;
@@ -53,6 +54,14 @@ export class RecapRavenSettingTab extends PluginSettingTab {
         },
       },
       {
+        name: 'Include session transcripts',
+        desc: TRANSCRIPT_DESCRIPTION,
+        control: {
+          type: 'toggle',
+          key: 'includeTranscripts',
+        },
+      },
+      {
         name: 'Create campaign index',
         desc: 'Create a campaign index when one does not already exist. Existing indexes are never changed.',
         control: {
@@ -68,10 +77,15 @@ export class RecapRavenSettingTab extends PluginSettingTab {
     if (key === 'tags') return settings.tags.join(', ');
     if (key === 'importFolder') return settings.importFolder;
     if (key === 'createCampaignIndex') return settings.createCampaignIndex;
+    if (key === 'includeTranscripts') return settings.includeTranscripts;
     return undefined;
   }
 
   async setControlValue(key: string, value: unknown): Promise<void> {
+    if (key === 'includeTranscripts' && typeof value === 'boolean') {
+      await this.host.updateSettings({ includeTranscripts: value });
+      return;
+    }
     if (key === 'importFolder' && typeof value === 'string') {
       await this.host.updateSettings({ importFolder: this.normalizeImportFolder(value) });
       return;
@@ -126,6 +140,17 @@ export class RecapRavenSettingTab extends PluginSettingTab {
           .setValue(this.host.getPluginSettings().tags.join(', '))
           .onChange(async (value) => {
             await this.host.updateSettings({ tags: this.parseTags(value) });
+          });
+      });
+
+    new Setting(containerEl)
+      .setName('Include session transcripts')
+      .setDesc(TRANSCRIPT_DESCRIPTION)
+      .addToggle((toggle) => {
+        toggle
+          .setValue(this.host.getPluginSettings().includeTranscripts)
+          .onChange(async (value) => {
+            await this.host.updateSettings({ includeTranscripts: value });
           });
       });
 

@@ -35,6 +35,57 @@ interface PluginHarness {
 }
 
 describe('production plugin orchestration', () => {
+  it('previews and imports both recap and transcript after an explicit opt-in', async () => {
+    const harness = await pluginHarness();
+    await harness.plugin.updateSettings({ includeTranscripts: true });
+    requestUrl
+      .mockResolvedValueOnce(response(connectionEnvelope()))
+      .mockResolvedValueOnce(response(sessionPage([sessionSummary(SESSION_IDS[0], 1)])))
+      .mockResolvedValueOnce(response(await sessionEnvelope(SESSION_IDS[0], 1)))
+      .mockResolvedValueOnce(response(await transcriptEnvelope(SESSION_IDS[0])));
+
+    command(harness, 'import-all-new-recaps').callback?.();
+    await waitFor(() => findButton('Preview plan') !== null);
+    button('Preview plan').click();
+    await waitFor(() => document.body.textContent?.includes('2 notes to create') === true);
+    expect(document.body.textContent).toContain('/Transcript.md');
+    expect(requestUrl).toHaveBeenCalledTimes(2);
+    button('Import').click();
+    await waitFor(() => document.body.textContent?.includes('1 imported, 0 skipped, 0 failed') === true);
+    expect(requestUrl).toHaveBeenLastCalledWith(expect.objectContaining({
+      url: `https://api.recapraven.com/v1/integrations/obsidian/sessions/${SESSION_IDS[0]}/transcript`,
+    }));
+    const recap = 'Recap Raven/The Glass Archive/Sessions/2026-08-11 - Session 1 - Through the Silver Door.md';
+    const child = `${recap.slice(0, -3)}/Transcript.md`;
+    expect(harness.files.get(child)).toBeInstanceOf(TFile);
+    expect(identityPaths(harness.plugin)).toEqual([recap]);
+    const transcript = harness.files.get(child);
+    if (!(transcript instanceof TFile)) throw new Error('Transcript was not created.');
+    expect(transcript.content).toContain('recap_raven_transcript_session_id:');
+  });
+
+  it('selects a missing transcript for an existing recap after restarting', async () => {
+    const recapPath = 'Moved recaps/Session.md';
+    const data = {
+      secretName: 'rr-export-key', includeTranscripts: true, createCampaignIndex: false,
+      sessionIdentities: [{ sessionId: SESSION_IDS[0], path: recapPath }],
+    };
+    const files = new Map<string, TFile | TFolder>([[recapPath, new TFile(recapPath, 'Edited recap')]]);
+    const harness = await pluginHarness({ data, files });
+    requestUrl
+      .mockResolvedValueOnce(response(connectionEnvelope()))
+      .mockResolvedValueOnce(response(sessionPage([sessionSummary(SESSION_IDS[0], 1)])))
+      .mockResolvedValueOnce(response(await transcriptEnvelope(SESSION_IDS[0])));
+    command(harness, 'import-all-new-recaps').callback?.();
+    await waitFor(() => findButton('Import selected') !== null);
+    expect(button('Import selected').disabled).toBe(false);
+    button('Import selected').click();
+    await waitFor(() => document.body.textContent?.includes('1 imported, 0 skipped, 0 failed') === true);
+    expect(harness.files.get(recapPath)).toMatchObject({ content: 'Edited recap' });
+    expect(harness.files.get('Moved recaps/Session/Transcript.md')).toBeInstanceOf(TFile);
+    expect(requestUrl).toHaveBeenCalledTimes(3);
+  });
+
   it('keeps networking manual, resolves only the SecretStorage reference, previews, and creates exclusively', async () => {
     const harness = await pluginHarness();
     const canonical = 'Recap Raven/The Glass Archive/Sessions/2026-08-11 - Session 1 - Through the Silver Door.md';
@@ -80,7 +131,7 @@ describe('production plugin orchestration', () => {
     expect(index).toBeInstanceOf(TFile);
     if (!(index instanceof TFile)) throw new Error('Campaign index was not created.');
     expect(index.content).toContain(
-      '```query\npath:"Recap Raven/The Glass Archive/Sessions"\n```',
+      '```query\npath:"Recap Raven/The Glass Archive/Sessions" [recap_raven_session_id]\n```',
     );
     expect(document.body.textContent).toContain('1 imported, 0 skipped, 0 failed, 0 not attempted.');
   });
@@ -120,6 +171,29 @@ describe('production plugin orchestration', () => {
       message: 'The export key is invalid, expired, or revoked. Open Obsidian Settings → Recap Raven to select a new key.',
       timeout: 8000,
     });
+  });
+
+  it('creates a filtered index alongside a legacy index without replacing either file', async () => {
+    const harness = await pluginHarness();
+    requestUrl.mockResolvedValue(response(connectionEnvelope()));
+    command(harness, 'create-campaign-index').callback?.();
+    const path = 'Recap Raven/The Glass Archive/Campaign index.md';
+    await waitFor(() => harness.files.has(path));
+    const generated = harness.files.get(path);
+    if (!(generated instanceof TFile)) throw new Error('Campaign index was not created.');
+    const legacy = generated.content.replace(' [recap_raven_session_id]', '');
+    harness.files.set(path, new TFile(path, legacy));
+    command(harness, 'create-campaign-index').callback?.();
+    const alternatePath = 'Recap Raven/The Glass Archive/Campaign index (Recap Raven).md';
+    await waitFor(() => harness.files.has(alternatePath));
+    expect(harness.files.get(path)).toMatchObject({ content: legacy });
+    const alternate = harness.files.get(alternatePath);
+    if (!(alternate instanceof TFile)) throw new Error('Filtered index was not created.');
+    expect(alternate.content).toContain('path:"Recap Raven/The Glass Archive/Sessions" [recap_raven_session_id]');
+    harness.files.set(alternatePath, new TFile(alternatePath, 'Edited alternate'));
+    command(harness, 'create-campaign-index').callback?.();
+    await waitFor(() => notices.some(({ message }) => message.includes('destination is occupied')));
+    expect(harness.files.get(alternatePath)).toMatchObject({ content: 'Edited alternate' });
   });
 
   it('keeps generated indexes idempotent and preserves a user-owned canonical index', async () => {
@@ -468,4 +542,16 @@ async function sessionEnvelope(id: string, number: number): Promise<unknown> {
       content_sha256: await sha256Hex(new TextEncoder().encode(markdown)),
     },
   };
+}
+
+async function transcriptEnvelope(sessionId: string): Promise<unknown> {
+  const text = '[00:01] Guide: The silver door opens.';
+  return { transcript: {
+    session_id: sessionId,
+    campaign_id: CAMPAIGN_ID,
+    artifact_created_at: '2026-09-05T12:00:00Z',
+    content_type: 'text/plain',
+    text,
+    content_sha256: await sha256Hex(new TextEncoder().encode(text)),
+  } };
 }
