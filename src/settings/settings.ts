@@ -3,6 +3,7 @@ export interface RecapRavenSettings {
   readonly importFolder: string;
   readonly tags: readonly string[];
   readonly createCampaignIndex: boolean;
+  readonly includeTranscripts: boolean;
 }
 
 export const DEFAULT_SETTINGS: RecapRavenSettings = Object.freeze({
@@ -10,6 +11,7 @@ export const DEFAULT_SETTINGS: RecapRavenSettings = Object.freeze({
   importFolder: 'Recap Raven',
   tags: Object.freeze(['recap-raven', 'session-recap']),
   createCampaignIndex: true,
+  includeTranscripts: false,
 });
 
 export function normalizeSettings(value: unknown): RecapRavenSettings {
@@ -24,6 +26,7 @@ export function normalizeSettings(value: unknown): RecapRavenSettings {
     createCampaignIndex: typeof record.createCampaignIndex === 'boolean'
       ? record.createCampaignIndex
       : DEFAULT_SETTINGS.createCampaignIndex,
+    includeTranscripts: record.includeTranscripts === true,
   };
 }
 

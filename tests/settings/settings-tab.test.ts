@@ -12,6 +12,7 @@ describe('RecapRavenSettingTab', () => {
       importFolder: 'Recap Raven',
       tags: ['recap-raven'],
       createCampaignIndex: true,
+      includeTranscripts: false,
     };
     const updateSettings = vi.fn(async (patch: Partial<RecapRavenSettings>) => {
       settings = { ...settings, ...patch };
@@ -34,6 +35,7 @@ describe('RecapRavenSettingTab', () => {
       'Connection',
       'Import folder',
       'Tags',
+      'Include session transcripts',
       'Create campaign index',
     ]);
     expect(control(definitions, 'Import folder')).toMatchObject({
@@ -41,6 +43,7 @@ describe('RecapRavenSettingTab', () => {
       key: 'importFolder',
     });
     expect(control(definitions, 'Tags')).toMatchObject({ type: 'text', key: 'tags' });
+    expect(control(definitions, 'Include session transcripts')).toMatchObject({ type: 'toggle', key: 'includeTranscripts' });
     expect(control(definitions, 'Create campaign index')).toMatchObject({
       type: 'toggle',
       key: 'createCampaignIndex',
@@ -80,6 +83,7 @@ describe('RecapRavenSettingTab', () => {
       importFolder: 'Recap Raven',
       tags: ['recap-raven', 'session-recap'],
       createCampaignIndex: true,
+      includeTranscripts: false,
     };
     const host = {
       getPluginSettings: () => settings,
@@ -94,6 +98,7 @@ describe('RecapRavenSettingTab', () => {
     expect(tab.getControlValue('importFolder')).toBe('Recap Raven');
     expect(tab.getControlValue('tags')).toBe('recap-raven, session-recap');
     expect(tab.getControlValue('createCampaignIndex')).toBe(true);
+    expect(tab.getControlValue('includeTranscripts')).toBe(false);
 
     await tab.setControlValue('importFolder', ' Campaigns\\Recaps ');
     await tab.setControlValue('tags', ' #recap-raven, session-recap, , #icewind ');
@@ -104,6 +109,8 @@ describe('RecapRavenSettingTab', () => {
       tags: ['recap-raven', 'session-recap', 'icewind'],
     });
     expect(host.updateSettings).toHaveBeenNthCalledWith(3, { createCampaignIndex: false });
+    await tab.setControlValue('includeTranscripts', true);
+    expect(host.updateSettings).toHaveBeenNthCalledWith(4, { includeTranscripts: true });
     await expect(tab.setControlValue('unknown', 'value')).rejects.toThrow('Unsupported setting control');
   });
 
@@ -113,6 +120,7 @@ describe('RecapRavenSettingTab', () => {
       importFolder: 'Recap Raven',
       tags: ['recap-raven'],
       createCampaignIndex: true,
+      includeTranscripts: false,
     };
     const updateSettings = vi.fn(async (patch: Partial<RecapRavenSettings>) => {
       settings = { ...settings, ...patch };
@@ -153,6 +161,7 @@ describe('RecapRavenSettingTab', () => {
       importFolder: 'Recap Raven',
       tags: ['recap-raven'],
       createCampaignIndex: true,
+      includeTranscripts: false,
     };
     const host = {
       getPluginSettings: () => settings,

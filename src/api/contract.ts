@@ -28,6 +28,38 @@ export interface Session extends SessionSummary {
   readonly content_sha256: string;
 }
 
+export interface SessionTranscript {
+  readonly session_id: string;
+  readonly campaign_id: string;
+  readonly artifact_created_at: string;
+  readonly content_type: 'text/plain';
+  readonly text: string;
+  readonly content_sha256: string;
+}
+
+export const MAX_TRANSCRIPT_BYTES = 8 * 1024 * 1024;
+
+export function parseTranscriptResponse(value: unknown): SessionTranscript {
+  const envelope = objectWithExactKeys(value, ['transcript'], 'transcript response');
+  const transcript = objectWithExactKeys(envelope.transcript, [
+    'session_id', 'campaign_id', 'artifact_created_at', 'content_type', 'text', 'content_sha256',
+  ], 'transcript');
+  const text = stringValue(transcript.text, 'transcript.text');
+  const hash = stringValue(transcript.content_sha256, 'transcript.content_sha256');
+  if (transcript.content_type !== 'text/plain'
+    || text.length === 0 || text.length > MAX_TRANSCRIPT_BYTES || !SHA256_PATTERN.test(hash)) {
+    throw new ContractValidationError('The transcript content is invalid.');
+  }
+  return {
+    session_id: uuidValue(transcript.session_id, 'transcript.session_id'),
+    campaign_id: uuidValue(transcript.campaign_id, 'transcript.campaign_id'),
+    artifact_created_at: dateTimeValue(transcript.artifact_created_at, 'transcript.artifact_created_at'),
+    content_type: 'text/plain',
+    text,
+    content_sha256: hash,
+  };
+}
+
 export interface SessionPage {
   readonly sessions: readonly SessionSummary[];
   readonly next_cursor: string | null;

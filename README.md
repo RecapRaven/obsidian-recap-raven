@@ -62,6 +62,8 @@ The recorded-date prefix keeps notes in chronological filename order. When a rec
 
 If a destination is already occupied by an unrelated note, the importer uses a stable short session-ID suffix. If the session ID is in the plugin's private import index, the recap is skipped. Files are never overwritten, updated, renamed, moved, or deleted.
 
+To include normalised session transcripts, create an export key with transcript access and enable **Include session transcripts** in the plugin settings. This is off by default. Transcripts may contain private GM material; enable it only for a vault intended to hold that material. Each transcript is created at `<recap filename>/Transcript.md`, with a link back to the recap. New recaps also link to their transcript. Existing recaps can receive a missing transcript without changing the recap; existing transcript files are preserved. If a transcript write fails after its recap is created, repeat the import to retry the missing transcript.
+
 ## Imported properties
 
 Each session note includes YAML properties similar to:
@@ -93,7 +95,7 @@ This integration requires a Recap Raven account and a campaign-bound export key.
 - create a campaign index; or
 - explicitly open a recap in Recap Raven.
 
-API requests are sent only to `https://api.recapraven.com`. They use read-only endpoints to download the bound campaign's player-safe metadata and recap Markdown. Requests include the export credential and ordinary connection and request metadata. Recap Raven keeps limited operational and security logs, including API-key use and IP-related security events, as described in the [Recap Raven Privacy Policy](https://recapraven.com/privacy).
+API requests are sent only to `https://api.recapraven.com`. They use read-only endpoints to download the bound campaign's player-safe metadata and recap Markdown, plus normalised transcripts when enabled in both the export key and plugin settings. Transcript identities, size, and SHA-256 integrity are checked before the text is escaped for safe Markdown display. Requests include the export credential and ordinary connection and request metadata. Recap Raven keeps limited operational and security logs, including API-key use and IP-related security events, as described in the [Recap Raven Privacy Policy](https://recapraven.com/privacy).
 
 The plugin does **not** upload vault notes, attachments, filenames, or other vault content to Recap Raven, and contains no client-side analytics or tracking.
 
@@ -118,7 +120,7 @@ Removing or revoking a credential does not delete Markdown files already importe
 - No plugin telemetry, analytics, advertising, tracking libraries, or promotional note footers.
 - No background network requests, startup synchronization, timers, or full-vault scans. Local Obsidian file events keep the private import index current when an indexed note is renamed, deleted, or has its session-ID property changed.
 - No access to files outside the current vault.
-- No transcript, GM-note, campaign-memory, lore, entity, MCP, or write API access.
+- Transcript access requires explicit permission in the export key and plugin settings. No GM-note, campaign-memory, lore, entity, MCP, or write API access.
 - No file overwrite, update, rename, move, or deletion behavior.
 - No third-party service receives vault content.
 
