@@ -133,3 +133,9 @@
     flex-direction: column;
   }
 }
+
+.recap-raven-transcript {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--font-text);
+}

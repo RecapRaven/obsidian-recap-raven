@@ -9,6 +9,41 @@ const SESSION_ID = '22222222-2222-4222-8222-222222222222';
 const KEY = 'raven_obs_test-key';
 
 describe('RecapRavenClient', () => {
+  it('fetches a transcript only from the scoped export endpoint', async () => {
+    const transport = vi.fn<RequestTransport>().mockResolvedValue(transcriptResponse());
+    const client = new RecapRavenClient(transport, () => KEY);
+    await expect(client.getTranscript(SESSION_ID, CAMPAIGN_ID)).resolves.toMatchObject({
+      session_id: SESSION_ID, campaign_id: CAMPAIGN_ID, content_type: 'text/plain',
+    });
+    expect(transport).toHaveBeenCalledWith({
+      url: `${API_ORIGIN}/v1/integrations/obsidian/sessions/${SESSION_ID}/transcript`,
+      method: 'GET',
+      headers: { Accept: 'application/json', Authorization: `Bearer ${KEY}` },
+    });
+  });
+
+  it('rejects mismatched transcript identity and invalid request ids', async () => {
+    const transport = vi.fn<RequestTransport>().mockResolvedValue(transcriptResponse());
+    const client = new RecapRavenClient(transport, () => KEY);
+    await expect(client.getTranscript(CAMPAIGN_ID, CAMPAIGN_ID)).rejects.toMatchObject({ code: 'unexpected-response' });
+    await expect(client.getTranscript(SESSION_ID, SESSION_ID)).rejects.toMatchObject({ code: 'unexpected-response' });
+    transport.mockClear();
+    await expect(client.getTranscript('../secret', CAMPAIGN_ID)).rejects.toMatchObject({ code: 'invalid-request' });
+    await expect(client.getTranscript(SESSION_ID, '../secret')).rejects.toMatchObject({ code: 'invalid-request' });
+    expect(transport).not.toHaveBeenCalled();
+  });
+
+  it.each([401, 403, 404, 429, 503])('does not leak transcript error bodies for status %i', async (status) => {
+    const transport = vi.fn<RequestTransport>().mockResolvedValue({ status, body: { text: 'private transcript', key: KEY } });
+    const error: unknown = await new RecapRavenClient(transport, () => KEY)
+      .getTranscript(SESSION_ID, CAMPAIGN_ID).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(RecapRavenError);
+    expect(error).toMatchObject({ status });
+    expect((error as Error).message).not.toContain('private transcript');
+    expect((error as Error).message).not.toContain(KEY);
+    expect(transport).toHaveBeenCalledOnce();
+  });
+
   it('uses only the fixed API origin and bearer export key', async () => {
     const transport = vi.fn<RequestTransport>().mockResolvedValue(connectionResponse());
     const client = new RecapRavenClient(transport, () => KEY);
@@ -179,6 +214,17 @@ describe('RecapRavenClient', () => {
     await expect(client.getSession(SESSION_ID, CAMPAIGN_ID)).resolves.toMatchObject({ id: SESSION_ID });
   });
 });
+
+function transcriptResponse(): HttpResponse {
+  return { status: 200, body: { transcript: {
+    session_id: SESSION_ID,
+    campaign_id: CAMPAIGN_ID,
+    artifact_created_at: '2026-09-05T12:00:00Z',
+    content_type: 'text/plain',
+    text: '[00:01] Guide: The door opens.',
+    content_sha256: 'a'.repeat(64),
+  } } };
+}
 
 function connectionResponse(): HttpResponse {
   return {

@@ -60,7 +60,7 @@ export function buildCampaignIndexNote(campaign: Campaign, sessionsFolderPath: s
   const lines = entries.map(([key, value]) => `${key}: ${yamlValue(value)}`);
   const heading = escapeMarkdownText(neutralizeExecutionDelimiters(campaign.name));
   const queryPath = sessionsFolderPath.replace(/[\\"`\r\n]/gu, "-");
-  return `---\n${lines.join("\n")}\n---\n\n# ${heading}\n\n[Open campaign in Recap Raven](${campaign.source_url})\n\n## Session recaps\n\nThis list updates automatically as recaps are imported.\n\n\`\`\`query\npath:"${queryPath}"\n\`\`\`\n`;
+  return `---\n${lines.join("\n")}\n---\n\n# ${heading}\n\n[Open campaign in Recap Raven](${campaign.source_url})\n\n## Session recaps\n\nThis list updates automatically as recaps are imported.\n\n\`\`\`query\npath:"${queryPath}" [recap_raven_session_id]\n\`\`\`\n`;
 }
 
 export function normalizeTags(tags: readonly string[]): readonly string[] {

@@ -52,7 +52,7 @@ describe("frontmatter", () => {
     expect(note).toContain('recap_raven_campaign: "Night:\\n---\\nadmin: true"');
     expect(note).toContain("# Night: \\-\\-\\- admin: true");
     expect(note).toContain("[Open campaign in Recap Raven](https://recapraven.com/campaigns/223e4567-e89b-42d3-a456-426614174000)");
-    expect(note).toContain('```query\npath:"Recap Raven/Night/Sessions"\n```');
+    expect(note).toContain('```query\npath:"Recap Raven/Night/Sessions" [recap_raven_session_id]\n```');
     expect(note.split("\n").filter((line) => line === "---")).toHaveLength(2);
   });
 

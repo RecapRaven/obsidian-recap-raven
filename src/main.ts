@@ -56,6 +56,7 @@ import {
   sessionNotePath,
 } from './utils/paths';
 import { buildCampaignIndexNote } from './utils/frontmatter';
+import { transcriptNotePath } from './utils/transcript';
 
 const RECAP_ORIGIN = 'https://recapraven.com';
 
@@ -231,24 +232,28 @@ export default class RecapRavenPlugin extends Plugin {
       );
       if (identities.has(summary.id)) {
         const existingPath = identities.paths(summary.id)[0];
+        const missingTranscript = this.pluginSettings.includeTranscripts && existingPath !== undefined
+          && this.app.vault.getAbstractFileByPath(transcriptNotePath(existingPath)) === null;
         items.push({
           sessionId: summary.id,
           title,
           sessionNumber: summary.session_number,
           recordedAt: summary.recorded_at,
-          destinationPath: canonical,
+          destinationPath: missingTranscript ? transcriptNotePath(existingPath) : canonical,
           ...(existingPath === undefined ? {} : { existingPath }),
-          state: 'imported',
+          state: missingTranscript ? 'new' : 'imported',
         });
         continue;
       }
       const occupied = this.app.vault.getAbstractFileByPath(normalizePath(canonical)) !== null;
+      const destinationPath = occupied ? collisionSessionPath(canonical, summary.id) : canonical;
       items.push({
         sessionId: summary.id,
         title,
         sessionNumber: summary.session_number,
         recordedAt: summary.recorded_at,
-        destinationPath: occupied ? collisionSessionPath(canonical, summary.id) : canonical,
+        destinationPath,
+        ...(this.pluginSettings.includeTranscripts ? { transcriptPath: transcriptNotePath(destinationPath) } : {}),
         state: occupied ? 'collision' : 'new',
       });
     }
@@ -262,7 +267,10 @@ export default class RecapRavenPlugin extends Plugin {
     const progress = new ImportProgressModal(this.app);
     progress.open();
     const service = new SessionImportService(
-      { getSession: (id) => this.client().getSession(id, context.campaign.id) },
+      {
+        getSession: (id) => this.client().getSession(id, context.campaign.id),
+        getTranscript: (id) => this.client().getTranscript(id, context.campaign.id),
+      },
       this.vaultAdapter(),
       context.identities,
     );
@@ -271,6 +279,7 @@ export default class RecapRavenPlugin extends Plugin {
       result = await service.importSessions(context.campaign, summaries, {
         importRoot: this.pluginSettings.importFolder,
         tags: this.pluginSettings.tags,
+        includeTranscripts: this.pluginSettings.includeTranscripts,
         classifyError: classifyImportError,
         onProgress: ({ current, total, summary }) => progress.update({
           current,
