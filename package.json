@@ -38,7 +38,7 @@
   "devDependencies": {
     "@eslint/js": "^9.39.4",
     "@types/node": "^22.18.0",
-    "@vitest/coverage-v8": "^3.2.4",
+    "@vitest/coverage-v8": "^5.0.2",
     "esbuild": "^0.28.2",
     "eslint": "^9.39.4",
     "eslint-plugin-obsidianmd": "^0.4.2",
@@ -50,6 +50,6 @@
     "stylelint-config-obsidianmd": "^0.1.0",
     "typescript": "^5.9.2",
     "typescript-eslint": "^8.68.0",
-    "vitest": "^3.2.4"
+    "vitest": "^5.0.2"
   }
 }
