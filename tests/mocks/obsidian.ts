@@ -212,10 +212,24 @@ export class SearchComponent extends InputComponent {
   }
 }
 
-export class SecretComponent extends InputComponent {
+export class SecretComponent {
+  public readonly inputEl: HTMLInputElement;
+
   constructor(_app: MockApp, container: HTMLElement) {
-    super(container, 'password');
-    this.inputEl.addClass('secret-component');
+    this.inputEl = container.createEl('input', { type: 'password', cls: 'secret-component' });
+  }
+
+  setValue(value: string): this {
+    this.inputEl.value = value;
+    return this;
+  }
+
+  onChange(callback: (value: string | null) => unknown): this {
+    this.inputEl.addEventListener('input', () => {
+      const value = this.inputEl.value;
+      void callback(value === '' ? null : value);
+    });
+    return this;
   }
 }
 
