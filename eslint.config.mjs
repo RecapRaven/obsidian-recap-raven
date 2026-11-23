@@ -28,8 +28,13 @@ export default defineConfig(
   },
   ...obsidianmd.configs.recommended,
   {
+    files: ['**/*.ts'],
     rules: {
       '@typescript-eslint/consistent-type-imports': 'error',
+    },
+  },
+  {
+    rules: {
       'obsidianmd/ui/sentence-case': [
         'error',
         {

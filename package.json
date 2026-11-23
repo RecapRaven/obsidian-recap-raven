@@ -1,6 +1,6 @@
 {
   "name": "recap-raven",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "description": "Import player-safe Recap Raven session recaps into your Obsidian vault.",
   "private": true,
   "main": "main.js",
@@ -45,7 +45,7 @@
     "globals": "^17.11.0",
     "happy-dom": "^21.0.4",
     "jiti": "^2.6.1",
-    "obsidian": "^1.13.1",
+    "obsidian": "^1.14.4",
     "stylelint": "^17.14.1",
     "stylelint-config-obsidianmd": "^0.1.0",
     "typescript": "^5.9.2",
