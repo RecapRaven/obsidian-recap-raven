@@ -177,7 +177,7 @@ export class RecapRavenSettingTab extends PluginSettingTab {
         .setValue(this.host.getPluginSettings().secretName)
         .onChange(async (value) => {
           this.connectionMessage = 'Not checked';
-          await this.host.updateSettings({ secretName: value });
+          await this.host.updateSettings({ secretName: value ?? '' });
           refresh();
         });
     });

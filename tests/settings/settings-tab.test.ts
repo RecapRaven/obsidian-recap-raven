@@ -155,7 +155,7 @@ describe('RecapRavenSettingTab', () => {
     expect(button(tab.containerEl, 'Test connection').disabled).toBe(false);
   });
 
-  it('enables connection testing immediately after a secret is selected', async () => {
+  it('updates connection testing when a secret is selected or cleared', async () => {
     let settings: RecapRavenSettings = {
       secretName: '',
       importFolder: 'Recap Raven',
@@ -186,6 +186,16 @@ describe('RecapRavenSettingTab', () => {
 
     expect(host.updateSettings).toHaveBeenCalledWith({ secretName: 'recap-raven-api-key' });
     expect(button(tab.containerEl, 'Test connection').disabled).toBe(false);
+
+    const selectedSecret = tab.containerEl.querySelector<HTMLInputElement>('.secret-component');
+    if (selectedSecret === null) throw new Error('Missing SecretComponent after refresh');
+    selectedSecret.value = '';
+    selectedSecret.dispatchEvent(new Event('input'));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(host.updateSettings).toHaveBeenLastCalledWith({ secretName: '' });
+    expect(button(tab.containerEl, 'Test connection').disabled).toBe(true);
   });
 });
 
